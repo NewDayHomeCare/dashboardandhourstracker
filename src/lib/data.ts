@@ -45,7 +45,7 @@ export function setVisitHours(clientId: string, date: string, hours: number): Ch
   const i = store.visits.findIndex((v) => v.clientId === clientId && v.date === date);
   const existing = store.visits[i];
   if (existing?.submitted) {
-    return { ok: false, error: "That day is already submitted in the portal, so it can't be changed here." };
+    return { ok: false, error: "That day is marked submitted. If that was a mistake, undo it on the Billing page first." };
   }
   if (hours === 0) {
     if (existing) store.visits.splice(i, 1);
@@ -61,6 +61,18 @@ export function markClaimSubmitted(visitIds: string[]): number {
   for (const v of store.visits) {
     if (visitIds.includes(v.id) && !v.submitted) {
       v.submitted = true;
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Undoes markClaimSubmitted for days marked submitted by mistake. */
+export function unmarkSubmitted(visitIds: string[]): number {
+  let count = 0;
+  for (const v of store.visits) {
+    if (visitIds.includes(v.id) && v.submitted) {
+      v.submitted = false;
       count++;
     }
   }

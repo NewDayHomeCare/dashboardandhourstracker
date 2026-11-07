@@ -4,7 +4,7 @@
 // through src/lib/data.ts, then refresh every page. (Programmer 2 owns this file.)
 
 import { revalidatePath } from "next/cache";
-import { addApproval, getClient, markClaimSubmitted, setVisitHours } from "@/lib/data";
+import { addApproval, getClient, markClaimSubmitted, setVisitHours, unmarkSubmitted } from "@/lib/data";
 import { today } from "@/lib/dates";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -54,4 +54,10 @@ export async function submitClaim(visitIds: string[]): Promise<ActionResult> {
   const n = markClaimSubmitted(visitIds);
   revalidatePath("/", "layout");
   return n > 0 ? { ok: true, message: `Marked ${n} line${n === 1 ? "" : "s"} submitted` } : { ok: false, error: "Nothing to mark." };
+}
+
+export async function undoSubmitted(visitIds: string[]): Promise<ActionResult> {
+  const n = unmarkSubmitted(visitIds);
+  revalidatePath("/", "layout");
+  return n > 0 ? { ok: true, message: `Moved ${n} line${n === 1 ? "" : "s"} back to billing` } : { ok: false, error: "Nothing to undo." };
 }

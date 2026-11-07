@@ -97,7 +97,7 @@ export function AddHoursButton(props: Shared & { primary?: boolean }) {
             <p id="hours-help" className="mt-2 text-sm text-muted">
               {existing
                 ? existing.submitted
-                  ? "This day is already submitted in the portal."
+                  ? "This day is marked submitted. If that was a mistake, undo it on the Billing page first."
                   : `Currently ${formatHours(existing.hours)} h on this day. Saving replaces it; enter 0 to remove it.`
                 : "Decimals are fine, for example 5.25."}
             </p>
