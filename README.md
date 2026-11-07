@@ -47,22 +47,37 @@ Rule of thumb: screens never do maths. If a screen needs a number, add a functio
 - Claims are split one per week (7 + 7). Turn off with `splitClaimsByWeek` to fill 10 then the rest.
 - The billing anchor date (`billingAnchor`) matches his real two-week cycle.
 
-## Next tasks
+## Team of 3: who does what
 
-**A — Engine**
-- [ ] "Running low" based on pace (projected hours by month end), not just hours left
-- [ ] Tests for a client with no approval, a decrease mid-month, a month boundary inside a billing period
+The owner letters in the table above (A–D) are from the original 4-person plan. Use this split instead.
 
-**B — Overview**
-- [ ] Search by name, sort by column
-- [ ] Month picker (previous months)
+| Person | Owns | Files |
+|---|---|---|
+| **UI** | How every screen looks and reads, the family-facing hours summary, slides and demo script | `src/app/**`, `src/components/**`, `globals.css` |
+| **Programmer 1 — Engine and data** | Rules, tests, storage, and the functions that change data | `src/lib/engine.ts`, `engine.test.ts`, `data.ts`, `settings.ts` |
+| **Programmer 2 — Features** | CSV import, saving forms, marking claims submitted, editing a day's hours | `src/lib/import.ts`, server actions in `src/app/actions.ts`, wiring into screens |
 
-**C — Client detail**
-- [ ] Save reassessments (needs storage from D)
-- [ ] Click a calendar day to add or edit that day's hours
+Rules for working in parallel:
+- UI never does maths and never changes `src/lib`; ask Programmer 1 for a new engine function.
+- Programmer 2 calls the data functions below and never edits `engine.ts`.
+- Agree on these data functions first (Programmer 1 writes them in `data.ts`, in memory to start):
+  `addApproval(approval)`, `setVisitHours(clientId, date, hours)`, `markClaimSubmitted(visitIds)`, `importVisits(rows)`.
 
-**D — Data, billing and pitch**
-- [ ] CSV import from the scheduling software (columns: client, date, hours)
-- [ ] Storage: start with a JSON file or localStorage, Supabase only if time allows
-- [ ] "Mark claim submitted"
-- [ ] Demo script and slides; time a manual claim entry vs. using the dashboard
+### Programmer 1 — Engine and data
+- [ ] Data functions above, in memory first, then saved to a JSON file so a restart keeps changes
+- [ ] "Running low" based on pace (projected hours by month end)
+- [ ] Tests: client with no approval, mid-month decrease, billing period crossing a month boundary
+- [ ] Summary for one client in plain words, for the family-facing page
+
+### Programmer 2 — Features
+- [ ] Save reassessments from `EditHoursForm` (server action → `addApproval`)
+- [ ] "Mark claim submitted" on the billing page
+- [ ] CSV import page: upload, preview rows, show errors, import (columns: client ID, date, hours)
+- [ ] Click a calendar day to add or edit its hours
+- [ ] Stretch: search and month picker on the overview
+
+### UI
+- [ ] Visual pass on all three screens: spacing, hierarchy, empty states, phone width
+- [ ] Accessibility: contrast, focus outlines, keyboard use, labels
+- [ ] Family-facing "Your hours this month" page or printable summary (covers the written brief)
+- [ ] Slides and demo script; time a manual claim entry vs. using the dashboard
