@@ -1,3 +1,4 @@
+import { UnbilledQueue } from "@/components/UnbilledQueue";
 import { MonthPicker } from "@/components/MonthPicker";
 // Hours overview: every client's hours this month. Design from the Figma Make prototype.
 
@@ -16,7 +17,7 @@ export default async function Overview({ searchParams }: { searchParams: Promise
   const visits = getVisits();
 
   const rows: ClientRow[] = clients.map((c) => {
-    const oldest = oldestUnsubmitted(visits.filter(v => v.date.startsWith(month)), c.id);
+    const oldest = oldestUnsubmitted(visits, c.id);
     return {
       client: c,
       lastServiceDate: visits.filter(v => v.clientId === c.id && v.date.startsWith(month)).map(v => v.date).sort().at(-1) ?? null,
@@ -52,10 +53,11 @@ export default async function Overview({ searchParams }: { searchParams: Promise
         <Tile label="Active clients" value={String(clients.length)} />
         <Tile label="Hours used this month" value={formatHours(used)} sub={`of ${formatHours(approved)} h approved`} />
         <Tile label="Clients needing attention" value={String(needAttention)} sub="over approved or running low" tone={needAttention ? "warn" : undefined} />
-        <Tile label="Near the 60-day billing limit" value={String(billingRisk)} sub="bill these first" tone={billingRisk ? "bad" : undefined} />
+        <Tile label="Billing deadlines (all months)" value={String(billingRisk)} sub="clients with urgent, approaching or expired deadlines" tone={billingRisk ? "bad" : undefined} />
       </section>
 
       <p className="mb-3 text-sm text-muted">Used = billed + unbilled. Remaining = approved - used. Billed means submitted, not paid.</p>
+      <UnbilledQueue visits={visits} clients={clients}/>
       <ClientTable rows={rows} month={month} />
     </>
   );

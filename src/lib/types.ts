@@ -44,6 +44,7 @@ export interface Visit {
   batchId?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  version?: number;
 }
 
 export type ClientStatus = "ok" | "low" | "over";
@@ -64,7 +65,7 @@ export interface MonthSummary {
 export interface ClaimLine {
   visitId: string;
   visitIds: string[];
-  services: { id: string; hours: number }[];
+  services: { id: string; hours: number; version?: number }[];
   date: ISODate;
   hours: number;
   costCents: number;
@@ -88,6 +89,7 @@ export interface BillingBatch {
   status: "submitted" | "paid" | "returned"; rateCents: number;
   visits: { id: string; date: string; hours: number; note?: string }[];
   createdAt: string; updatedAt: string; note: string;
+  voidedVisitIds?: string[];
 }
 export interface AuditEvent {
   id: string; clientId: string; action: string; targetId: string; at: string;

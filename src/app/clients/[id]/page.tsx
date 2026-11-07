@@ -76,7 +76,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <td>{v.submitted ? "Billed" : "Unbilled"}<p className="max-w-xs text-xs text-muted break-words">{v.note}</p></td>
               <td><div className="flex flex-wrap items-center gap-2">
                 {!v.submitted && <AddHoursButton key={`${v.id}-${v.hours}`} clients={pick} approvals={allApprovals} visits={allVisits}
-                  defaultClientId={id} month={month} defaultDate={v.date} defaultHours={v.hours} serviceId={v.id} buttonLabel="Edit" primary={false} />}
+                  defaultClientId={id} month={month} defaultDate={v.date} defaultHours={v.hours} serviceId={v.id} expectedVersion={v.version} buttonLabel="Edit" primary={false} />}
                 <ServiceActions visit={v} />
               </div></td>
             </tr>

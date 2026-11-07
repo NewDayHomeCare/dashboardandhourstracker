@@ -6,7 +6,7 @@ This is a **single-computer prototype**, not a hosted clinical or financial prod
 
 Requires Node 24+. Run `npm ci`, then `npm run dev` (development) or `npm run build` followed by `npm start` (demo). Open http://127.0.0.1:3000 on the same computer. Keep it bound to loopback; the app has no authentication.
 
-The fictional demo date remains 2026-11-07 in `src/lib/settings.ts`. The UI shows this date. Do not confuse it with live operations.
+The normal clock uses the current UTC date. To opt into a fixed demo clock, set NEXT_PUBLIC_HOMECARE_DEMO_DATE in .env.local using the .env.example template, then restart development or rebuild the production app. The global operating notice clearly identifies the mode. Tests use an isolated fixed date.
 
 ## What changed
 
@@ -25,7 +25,7 @@ The fictional demo date remains 2026-11-07 in `src/lib/settings.ts`. The UI show
 
 1. Each Add operation creates a separate completed service. Multiple services per day are allowed, including new services after another same-day service was submitted.
 2. All completed services reduce that service month's remaining allowance immediately. Billing and payment do not deduct again. Unused hours do not carry over.
-3. Edit and Delete target a service ID, not a whole date. A stale hours value is refused. Submitted services are locked.
+3. Edit and Delete target a service ID and revision, not a whole date. Stale hours or revisions are refused. Submitted services are locked.
 4. Reusing a saved request ID and identical payload is a safe retry; changing the payload with the same ID is refused. Same client/date/duration requires duplicate confirmation.
 5. The prototype caps a client's total completed hours per day at 24. Revisit if simultaneous multi-caregiver hours are valid for this business.
 6. Claims group unbilled services by date. Staff must verify actual submission externally, then enter a reference and date. The local action sends nothing externally.
@@ -56,7 +56,7 @@ Restore only with the server stopped: preserve the current file, copy the intend
 - External schedule/billing integration and reconciliation. Manual status recording is not proof of external acceptance/payment.
 - Per-service time or caregiver identifiers for better duplicate checks; reliable automated duplicate import keys; approval-document linkage.
 - Cancellation/refund/credit/partial payment/partial return and retroactive rate corrections.
-- Current stale-edit checks compare hours; simultaneous note-only edits are not fully protected. No general multi-user concurrency or role model is claimed.
+- Service edits, deletes, submissions and UI undo requests carry integer record revisions; stale requests are refused, including note-only edits. This does not implement a general multi-user login or role model.
 - Demo settings must be replaced with verified operational settings. Billing amounts are **draft estimates**, not approved submissions.
 
 ## GitHub upload (no database)
@@ -84,3 +84,14 @@ If Git reports new remote commits or conflicts, stop and reconcile with the team
 ## Product direction
 
 A stronger demonstration is an end-to-end reconciliation story, not more decorative charts: import an anonymized schedule report, detect duplicates/unbilled services, show a monthly shortage, prepare the biweekly claim, retain the submission reference, and handle a return without corrupting the allowance. Real report samples and measured time savings are the next evidence needed. The report import and actual external submission are not implemented in this change.
+
+## Billing alerts and record-revision fixes
+
+- Created from latest main, including the teammate's per-service Undo functionality.
+- Monthly allowance/usage stays filtered by the selected month. Deadline alerts and the oldest-unbilled queue use **all months**. Historical rows link to their service month and billing period. The overview shows the 10 oldest unbilled services and states the limit.
+- Existing SQLite databases get a consistent backup before the revision/undo-ledger schema migration. Existing service values are preserved; version starts at 1.
+- Every service edit or billing-state mutation increments an integer revision, even when hours are unchanged. Browser edits/deletes/submissions carry the revision they reviewed; missing or outdated revisions are refused. Compatibility daily-import wrappers read a current revision internally.
+- Partial Undo preserves the original submission snapshot. Voided service IDs are tracked separately. The original lines remain inspectable; active totals exclude locally undone lines. Fully undone batches show returned status; paid claims remain locked. Each action is retained in history.
+- Old snapshots already changed by earlier software cannot be reconstructed from nothing; this fix prevents further rewriting. Check old backups or external references if historical reconciliation is needed.
+- No guessed policy was silently made official. The global notice enumerates the single demo rate, unconfirmed daily proration, cycle, line limit and deadline rule. Historical rate schedules and policy confirmation remain required.
+- This change does not implement CSV import or synchronize extension submission status. Those remain separate next tasks.

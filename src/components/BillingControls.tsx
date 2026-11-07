@@ -4,7 +4,7 @@ import { submitClaim, updateClaimStatus } from "@/app/actions";
 import { Modal, Toast, fieldClass, labelClass, primaryButton, secondaryButton } from "./Modal";
 import { today } from "@/lib/dates";
 import type { Visit, BillingBatch } from "@/lib/types";
-export function SubmitServicesButton({ services, label="Record submission" }: { services: Pick<Visit,"id"|"hours">[]; label?:string }) {
+export function SubmitServicesButton({ services, label="Record submission" }: { services: Pick<Visit,"id"|"hours"|"version">[]; label?:string }) {
   const [open,setOpen]=useState(false);const [reference,setReference]=useState("");const [date,setDate]=useState(today());
   const [requestId,setRequestId]=useState("");const [confirmed,setConfirmed]=useState(false);const [error,setError]=useState("");const [pending,start]=useTransition();const [message,setMessage]=useState("");
   return <><button className={secondaryButton} disabled={pending} onClick={()=>{setOpen(true);setRequestId(crypto.randomUUID());setError("");setReference("");setConfirmed(false);}}> {label} </button>

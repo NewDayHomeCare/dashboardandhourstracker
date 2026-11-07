@@ -152,13 +152,13 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
               <li key={client.id} className="rounded-xl border border-line p-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-bold text-slate-800">{client.lastName}, {client.firstName}</span>
-                  {days.length > 1 && <UndoSubmitted visitIds={days.map((d) => d.id)} label={`Undo all ${days.length}`} />}
+                  {days.length > 1 && <UndoSubmitted visits={days.map(d=>({id:d.id,version:d.version??0}))} label={`Undo all ${days.length}`} />}
                 </div>
                 <ul className="flex flex-wrap gap-2 text-sm">
                   {days.map((d) => (
                     <li key={d.id} className="flex items-center gap-2 rounded-lg bg-slate-50 py-1 pl-3 pr-1">
                       <span>{formatDate(d.date)} · {formatHours(d.hours)} h</span>
-                      <UndoSubmitted visitIds={[d.id]} label="Undo" />
+                      <UndoSubmitted visits={[{id:d.id,version:d.version??0}]} label="Undo" />
                     </li>
                   ))}
                 </ul>
