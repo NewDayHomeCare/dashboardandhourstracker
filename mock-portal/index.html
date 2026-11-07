@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock provider portal (demo only)</title>
+<!--
+  A stand-in for the provider portal, following the claim steps described in Alberta Blue Cross's
+  public Hospital Providers User Guide and Scott's description: patient lookup, other coverage,
+  enter details one service at a time with "Add claim", Predetermine, then Process claim.
+  Not a copy of any real site's look. Sample data only. Nothing is sent anywhere.
+-->
+<style>
+  :root { --ink:#1f2a2e; --muted:#4a5558; --line:#c9d3d1; --accent:#3b4649; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 16px/1.5 system-ui, sans-serif; color:var(--ink); background:#f3f4f2; }
+  .banner { background:#fbf0d9; color:#6b4200; padding:10px 20px; font-weight:600; }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+  .steps { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; padding:0; list-style:none; font-size:14px; }
+  .steps li { padding:4px 10px; border-radius:999px; background:#e4e8e7; color:var(--muted); }
+  .steps li[aria-current] { background:var(--accent); color:#fff; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:0 0 12px; }
+  p.hint { margin:0 0 16px; color:var(--muted); }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap:12px; align-items:end; }
+  label { display:block; font-size:14px; font-weight:600; margin-bottom:4px; }
+  input, select { width:100%; min-height:40px; padding:0 10px; font:inherit; border:1px solid #9aa6a4; border-radius:6px; background:#fff; }
+  input[readonly] { background:#f7f8f7; }
+  fieldset { border:none; padding:0; margin:0 0 16px; }
+  legend { font-weight:600; margin-bottom:6px; }
+  .radio { display:inline-flex; gap:6px; align-items:center; margin-right:16px; font-weight:400; }
+  .radio input { width:auto; min-height:auto; }
+  button { font:inherit; min-height:44px; padding:0 16px; border-radius:6px; border:1px solid #9aa6a4; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .date { display:flex; gap:6px; }
+  .date button { white-space:nowrap; min-height:40px; padding:0 10px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th, td { text-align:left; padding:6px; border-bottom:1px solid #eef1f0; }
+  .picker { position:absolute; z-index:10; background:#fff; border:1px solid #9aa6a4; border-radius:10px; padding:12px; width:290px; box-shadow:0 8px 24px rgba(0,0,0,.15); }
+  .picker header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:700; }
+  .picker header button { min-height:36px; padding:0 10px; }
+  .days { display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; }
+  .days button { min-height:34px; padding:0; }
+  .msg { margin-top:12px; padding:12px; border-radius:8px; }
+  .ok { background:#e3f0ee; color:#0a403b; }
+  .bad { background:#fbe7e7; color:#8a1f1f; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="banner" role="note">Mock provider portal for testing only. Not a real system. Use sample data only.</div>
+<main>
+  <h1>Enter claim</h1>
+  <ol class="steps" id="steps">
+    <li>1. Patient</li><li>2. Other coverage</li><li>3. Enter details</li><li>4. Predetermine</li><li>5. Done</li>
+  </ol>
+
+  <!-- Step 1: patient lookup -->
+  <section class="card" data-step="1">
+    <h2>Patient</h2>
+    <p class="hint">Enter the patient ID, group number and date of birth, then Search. For a returning patient you can look up by name instead.</p>
+    <div class="grid">
+      <div><label for="pid">Patient ID number</label><input id="pid" autocomplete="off"></div>
+      <div><label for="grp">Group number</label><input id="grp" autocomplete="off"></div>
+      <div><label for="dob">Date of birth</label><input id="dob" type="date"></div>
+    </div>
+    <div class="actions"><button type="button" class="primary" id="search">Search</button></div>
+    <h2 style="margin-top:20px">Returning patient</h2>
+    <div class="grid">
+      <div><label for="rln">Last name</label><input id="rln" autocomplete="off"></div>
+      <div><label for="rfn">First name</label><input id="rfn" autocomplete="off"></div>
+      <div><button type="button" id="find">Find returning patient</button></div>
+    </div>
+    <div id="m1" role="status" aria-live="polite"></div>
+  </section>
+
+  <!-- Step 2: coordination of benefits + invoice -->
+  <section class="card" data-step="2" hidden>
+    <h2>Other coverage</h2>
+    <p class="hint" id="patientLine"></p>
+    <fieldset>
+      <legend>Does the patient have other active coverage, or has another carrier paid?</legend>
+      <label class="radio"><input type="radio" name="cob" value="no">No</label>
+      <label class="radio"><input type="radio" name="cob" value="yes">Yes</label>
+    </fieldset>
+    <div class="grid"><div><label for="inv">Invoice, account or patient number (optional)</label><input id="inv" autocomplete="off"></div></div>
+    <div class="actions"><button type="button" class="primary" id="continue">Continue</button></div>
+    <div id="m2" role="status" aria-live="polite"></div>
+  </section>
+
+  <!-- Step 3: enter details, one service at a time -->
+  <section class="card" data-step="3" hidden>
+    <h2>Enter details</h2>
+    <p class="hint">Enter one service, then Add claim. Up to 10 per claim. Then Predetermine.</p>
+    <div class="grid">
+      <div><label for="sdate">Date of service</label>
+        <div class="date"><input id="sdate" readonly placeholder="Choose a date"><button type="button" id="pick" aria-label="Choose date">Choose date</button></div></div>
+      <div><label for="stype">Service type</label>
+        <select id="stype"><option value="">Select…</option><option>Personal care</option><option>Home support</option><option>Respite</option></select></div>
+      <div><label for="shours">Hours</label><input id="shours" inputmode="decimal"></div>
+      <div><label for="scost">Total cost</label><input id="scost" inputmode="decimal"></div>
+    </div>
+    <div class="actions"><button type="button" id="add">Add claim</button><button type="button" class="primary" id="predetermine">Predetermine</button></div>
+    <div id="m3" role="status" aria-live="polite"></div>
+    <table><caption style="text-align:left; font-weight:600">Services on this claim</caption>
+      <thead><tr><th>#</th><th>Date</th><th>Service type</th><th>Hours</th><th>Total cost</th></tr></thead>
+      <tbody id="services"></tbody></table>
+  </section>
+
+  <!-- Step 4: predetermine result -->
+  <section class="card" data-step="4" hidden>
+    <h2>Predetermine</h2>
+    <div class="msg ok" id="pdResult"></div>
+    <div class="actions">
+      <button type="button" id="modify">Modify</button>
+      <button type="button" id="cancel">Cancel</button>
+      <button type="button" class="primary" id="process">Process claim</button>
+    </div>
+  </section>
+
+  <!-- Step 5: done -->
+  <section class="card" data-step="5" hidden>
+    <h2>Claim processed (mock)</h2>
+    <p>Nothing was sent anywhere. In the real portal you would print the claim statement for the patient.</p>
+    <div class="actions"><button type="button" id="again" class="primary">Enter another claim</button></div>
+  </section>
+</main>
+
+<script>
+  // Fake portal records for the sample clients (the portal's own data, not the helper's).
+  const RECORDS = {};
+  const FIRST = ["Alex","Morgan","Pat","Sam","Jordan","Robin","Casey","Lee","Terry","Jamie","Chris","Dana","Kim","Lou","Max","Noel","Rene","Shawn","Toni","Val"];
+  const LAST = ["Sample","Tremblay","Martin","Nguyen","Singh","Roy","Wong","Campbell","Gagnon","Patel","Anderson","Chen","Kowalski","Bouchard","Morrison","Olsen","Reid","Kaur","Fraser","Hughes"];
+  for (let i = 0; i < 40; i++) RECORDS[`SAMPLE-${1001 + i}`] = { first: FIRST[i % 20], last: LAST[(i * 7 + Math.floor(i / 20) * 3) % 20], dob: `19${40 + (i % 30)}-0${1 + (i % 9)}-1${i % 9}` };
+  const GROUP = "GRP-123";
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const $ = (id) => document.getElementById(id);
+  let step = 1, services = [], picker = null, patient = null;
+
+  function go(n) {
+    step = n;
+    document.querySelectorAll("[data-step]").forEach((s) => (s.hidden = Number(s.dataset.step) !== n));
+    [...$("steps").children].forEach((li, i) => (i + 1 === n ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current")));
+  }
+  function say(id, text, ok) { $(id).className = "msg " + (ok ? "ok" : "bad"); $(id).textContent = text; }
+
+  $("find").onclick = () => {
+    const hit = Object.entries(RECORDS).find(([, r]) => r.last.toLowerCase() === $("rln").value.trim().toLowerCase() && r.first.toLowerCase() === $("rfn").value.trim().toLowerCase());
+    if (!hit) return say("m1", "No returning patient found with that name.", false);
+    $("pid").value = hit[0]; $("grp").value = GROUP; $("dob").value = hit[1].dob;
+    say("m1", "Returning patient found. Check the details, then Search.", true);
+  };
+  $("search").onclick = () => {
+    const r = RECORDS[$("pid").value.trim()];
+    if (!r || $("grp").value.trim() !== GROUP || $("dob").value !== r.dob) return say("m1", "No patient matches that ID, group number and date of birth.", false);
+    patient = r; $("patientLine").textContent = `Patient: ${r.first} ${r.last}`; go(2);
+  };
+  $("continue").onclick = () => {
+    const cob = document.querySelector('input[name="cob"]:checked');
+    if (!cob) return say("m2", "Answer the other coverage question.", false);
+    if (cob.value === "yes") return say("m2", "This mock only supports patients without other coverage.", false);
+    go(3);
+  };
+
+  function openPicker() {
+    closePicker();
+    const cur = $("sdate").value ? new Date($("sdate").value + "T00:00:00") : new Date(2026, 10, 1);
+    let y = cur.getFullYear(), m = cur.getMonth();
+    picker = document.createElement("div");
+    picker.className = "picker"; picker.setAttribute("role", "dialog"); picker.setAttribute("aria-label", "Choose date of service");
+    const r = $("pick").getBoundingClientRect();
+    picker.style.left = (r.left + scrollX) + "px"; picker.style.top = (r.bottom + scrollY + 6) + "px";
+    document.body.appendChild(picker);
+    const render = () => {
+      let days = ""; for (let i = 0; i < new Date(y, m, 1).getDay(); i++) days += "<span></span>";
+      for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) days += `<button type="button" data-day="${d}" aria-label="${MONTHS[m]} ${d}, ${y}">${d}</button>`;
+      picker.innerHTML = `<header><button type="button" aria-label="Previous month">‹</button><span>${MONTHS[m]} ${y}</span><button type="button" aria-label="Next month">›</button></header><div class="days">${days}</div>`;
+      picker.querySelector('[aria-label="Previous month"]').onclick = () => { if (--m < 0) { m = 11; y--; } render(); };
+      picker.querySelector('[aria-label="Next month"]').onclick = () => { if (++m > 11) { m = 0; y++; } render(); };
+      picker.querySelectorAll("[data-day]").forEach((b) => (b.onclick = () => {
+        $("sdate").value = `${y}-${String(m + 1).padStart(2, "0")}-${String(b.dataset.day).padStart(2, "0")}`;
+        closePicker();
+      }));
+    };
+    render();
+  }
+  function closePicker() { if (picker) { picker.remove(); picker = null; } }
+  $("pick").onclick = openPicker;
+  document.addEventListener("keydown", (e) => e.key === "Escape" && closePicker());
+
+  $("add").onclick = () => {
+    const s = { date: $("sdate").value, type: $("stype").value, hours: $("shours").value, cost: $("scost").value };
+    if (!s.date || !s.type || !s.hours || !s.cost) return say("m3", "Fill in date, service type, hours and total cost before Add claim.", false);
+    if (services.length >= 10) return say("m3", "A claim can have at most 10 services.", false);
+    services.push(s);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${services.length}</td><td>${s.date}</td><td>${s.type}</td><td>${s.hours}</td><td>${s.cost}</td>`;
+    $("services").appendChild(tr);
+    ["sdate", "shours", "scost"].forEach((id) => ($(id).value = "")); $("stype").value = "";
+    say("m3", `Service ${services.length} added.`, true);
+  };
+  $("predetermine").onclick = () => {
+    if (!services.length) return say("m3", "Add at least one service first.", false);
+    const total = services.reduce((t, s) => t + Number(s.cost), 0);
+    $("pdResult").textContent = `Predetermination (mock): ${services.length} services covered. Alberta Blue Cross pays $${total.toFixed(2)}. Patient pays $0.00.`;
+    go(4);
+  };
+  $("modify").onclick = () => go(3);
+  $("cancel").onclick = () => location.reload();
+  $("process").onclick = () => go(5);
+  $("again").onclick = () => location.reload();
+  go(1);
+</script>
+</body>
+</html>
