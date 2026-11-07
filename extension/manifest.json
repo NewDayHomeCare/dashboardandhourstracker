@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "New Day Claim Helper (prototype)",
+  "version": "0.1.0",
+  "description": "Fills a prepared claim into the billing portal for staff to check, predetermine and submit themselves.",
+  "permissions": ["storage", "sidePanel"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Open claim helper" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["fieldmap.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
