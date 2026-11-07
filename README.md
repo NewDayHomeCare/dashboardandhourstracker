@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# New Day · Client Hours Dashboard (natHacks 2026)
 
-## Getting Started
+Shows each client's approved, used and remaining CDHCI hours for the month, and turns
+unbilled days into portal-ready claims. Runs on 40 made-up sample clients.
 
-First, run the development server:
+## Get started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
+npm test        # calculation engine tests (13 passing)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Needs Node 20 or newer.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Where things are
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | What it is | Owner |
+|---|---|---|
+| `src/lib/types.ts` | Shared data types. Agree as a team before changing. | Everyone |
+| `src/lib/settings.ts` | Rate ($35.03), max 10 lines per claim, billing anchor date, 60-day limit, demo "today" | A |
+| `src/lib/engine.ts` | All calculations: approved hours, banked hours, used/left, status, billing periods, claims, 60-day limit | A |
+| `src/lib/engine.test.ts` | Tests for the rules. Add one for every new rule or edge case. | A |
+| `src/lib/sampleData.ts` | 40 fake clients, Oct 1 to Nov 7, 2026 | D |
+| `src/lib/data.ts` | The one place screens get data from. Swap in CSV import or a database here. | D |
+| `src/app/page.tsx` + `src/components/ClientTable.tsx` | Overview screen | B |
+| `src/app/clients/[id]/page.tsx` + `src/components/EditHoursForm.tsx` | Client detail and reassessment form | C |
+| `src/app/billing/page.tsx` + `src/components/CopyClaimButton.tsx` | Billing period and claims | D |
 
-## Learn More
+Rule of thumb: screens never do maths. If a screen needs a number, add a function to
+`engine.ts` with a test.
 
-To learn more about Next.js, take a look at the following resources:
+## Business rules (from the meeting with Scott)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Approved hours are per month. Unused hours do **not** carry over.
+- Billing runs every two weeks. One portal line per day of care, up to 10 lines per claim.
+- Cost = hours × $35.03, rounded to the cent. Hours can be fractional (5.25).
+- Lines must be billed within 60 days. Warn at 45 days, urgent at 55.
+- Clients' hours change after reassessment. If an increase is backdated, the extra hours
+  for days already past are "banked" so totals stay accurate.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Assumptions to confirm with Scott
 
-## Deploy on Vercel
+- Mid-month changes are split by day (each day gets 1/days-in-month of the monthly hours in force).
+- Banked hours are added to this month's remaining hours.
+- The 60-day limit counts from the service date.
+- Claims are split one per week (7 + 7). Turn off with `splitClaimsByWeek` to fill 10 then the rest.
+- The billing anchor date (`billingAnchor`) matches his real two-week cycle.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Next tasks
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**A — Engine**
+- [ ] "Running low" based on pace (projected hours by month end), not just hours left
+- [ ] Tests for a client with no approval, a decrease mid-month, a month boundary inside a billing period
+
+**B — Overview**
+- [ ] Search by name, sort by column
+- [ ] Month picker (previous months)
+
+**C — Client detail**
+- [ ] Save reassessments (needs storage from D)
+- [ ] Click a calendar day to add or edit that day's hours
+
+**D — Data, billing and pitch**
+- [ ] CSV import from the scheduling software (columns: client, date, hours)
+- [ ] Storage: start with a JSON file or localStorage, Supabase only if time allows
+- [ ] "Mark claim submitted"
+- [ ] Demo script and slides; time a manual claim entry vs. using the dashboard
