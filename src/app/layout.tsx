@@ -1,3 +1,4 @@
+import { OperatingNotice } from "@/components/OperatingNotice";
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <AppShell todayLabel={todayLabel}>{children}</AppShell>
+        <AppShell todayLabel={todayLabel}><OperatingNotice />{children}</AppShell>
       </body>
     </html>
   );

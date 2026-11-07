@@ -1,7 +1,8 @@
+import { demoDateFromEnvironment } from "./clockConfig";
 // Values New Day staff may need to change. Keep business numbers here, never in screen code.
 
 export const settings = {
-  /** CDHCI hourly rate, confirmed by Scott. */
+  /** Unverified demo hourly rate; no historical rate schedule has been provided. */
   hourlyRateCents: 3503,
   /** Most lines (days) the portal accepts in one claim. */
   maxLinesPerClaim: 10,
@@ -16,6 +17,6 @@ export const settings = {
   deadlineUrgentDays: 55,
   /** A client is "running low" when fewer than this share of approved hours are left. */
   lowShare: 0.15,
-  /** Fixed "today" so the demo always looks the same. Set to null to use the real date. */
-  demoToday: "2026-11-07" as string | null,
+  /** Optional demo clock. Rebuild when changing this public environment variable. */
+  demoToday: demoDateFromEnvironment(process.env.NEXT_PUBLIC_HOMECARE_DEMO_DATE),
 };
