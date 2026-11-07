@@ -76,6 +76,15 @@
     <div id="m1" role="status" aria-live="polite"></div>
   </section>
 
+  <!-- Test data only: lets the team see the fake patients this mock portal knows about. -->
+  <details class="card" id="sampleBox">
+    <summary style="cursor:pointer; font-weight:600">Sample patients for testing (fake data, group number GRP-123)</summary>
+    <p class="hint" style="margin-top:12px">These match the dashboard's sample clients. A real portal would never show this.</p>
+    <div style="max-height:320px; overflow:auto">
+      <table><thead><tr><th>Patient ID number</th><th>Name</th><th>Date of birth</th></tr></thead><tbody id="samples"></tbody></table>
+    </div>
+  </details>
+
   <!-- Step 2: coordination of benefits + invoice -->
   <section class="card" data-step="2" hidden>
     <h2>Other coverage</h2>
@@ -139,8 +148,12 @@
   const $ = (id) => document.getElementById(id);
   let step = 1, services = [], picker = null, patient = null;
 
+  $("samples").innerHTML = Object.entries(RECORDS)
+    .map(([id, r]) => `<tr><td>${id}</td><td>${r.last}, ${r.first}</td><td>${r.dob}</td></tr>`).join("");
+
   function go(n) {
     step = n;
+    $("sampleBox").hidden = n !== 1;
     document.querySelectorAll("[data-step]").forEach((s) => (s.hidden = Number(s.dataset.step) !== n));
     [...$("steps").children].forEach((li, i) => (i + 1 === n ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current")));
   }
