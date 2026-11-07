@@ -1,7 +1,8 @@
+import { BillingHistory } from "@/components/BillingHistory";
 // Billing: claims for one two-week period, ready to enter in the portal.
 
 import Link from "next/link";
-import { getClients, getVisits } from "@/lib/data";
+import { getClients, getVisits, getBatches } from "@/lib/data";
 import {
   buildClaims,
   daysLeftToBill,
@@ -11,7 +12,7 @@ import {
   periodEnd,
   periodStartFor,
 } from "@/lib/engine";
-import { addDays, formatDate, today } from "@/lib/dates";
+import { addDays, formatDate, today, validDate } from "@/lib/dates";
 import { settings } from "@/lib/settings";
 import { DeadlineBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Icon";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Billing({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period } = await searchParams;
-  const start = periodStartFor(period && /^\d{4}-\d{2}-\d{2}$/.test(period) ? period : today());
+  const start = periodStartFor(period && validDate(period) ? period : today());
   const end = periodEnd(start);
   const visits = getVisits();
 
@@ -59,6 +60,8 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
         <Tile label="Total" value={formatMoney(totalCents)} />
       </section>
 
+      <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">Draft amounts use an unverified demo rate and billing cycle. Confirm rates, effective dates, claim limits and deadlines before real billing. Copy does not submit a claim.</p>
+      <BillingHistory batches={getBatches()} />
       {byClient.length === 0 && (
         <p className="rounded-2xl border border-line bg-white p-8 text-center text-muted">Nothing left to bill in this period.</p>
       )}

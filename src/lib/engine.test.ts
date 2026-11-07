@@ -133,3 +133,13 @@ describe("60-day billing limit", () => {
     expect(deadlineStatus("2026-09-01", "2026-11-07")).toBe("expired"); // 67 days
   });
 });
+
+describe("monthly billing totals", () => {
+  it("counts billed and unbilled services in usage, without mixing months", () => {
+    const visits = [visit("2026-11-01", 2.5, { submitted: true }), visit("2026-11-02", 5.25), visit("2026-10-01", 9)];
+    const summary = monthSummary([approval({ monthlyHours: 100 })], visits, "c1", "2026-11");
+    expect(summary).toMatchObject({ billedHours: 2.5, unbilledHours: 5.25, usedHours: 7.75, leftHours: 92.25 });
+    const billed = monthSummary([approval({ monthlyHours: 100 })], visits.map(v => ({ ...v, submitted: true })), "c1", "2026-11");
+    expect(billed).toMatchObject({ billedHours: 7.75, unbilledHours: 0, usedHours: 7.75, leftHours: 92.25 });
+  });
+});
