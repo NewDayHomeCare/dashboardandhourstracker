@@ -1,54 +1,71 @@
-// Overview: every client's hours for the current month. (Person B owns this screen.)
+// Hours overview: every client's hours this month. Design from the Figma Make prototype.
 
 import { getApprovals, getClients, getVisits } from "@/lib/data";
-import { daysLeftToBill, deadlineStatus, monthSummary, oldestUnsubmitted } from "@/lib/engine";
+import { daysLeftToBill, deadlineStatus, formatHours, monthSummary, oldestUnsubmitted } from "@/lib/engine";
 import { formatMonth, monthOf, today } from "@/lib/dates";
 import { ClientTable, type ClientRow } from "@/components/ClientTable";
+import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
+
+export const dynamic = "force-dynamic";
 
 export default function Overview() {
   const month = monthOf(today());
+  const clients = getClients();
   const approvals = getApprovals();
   const visits = getVisits();
 
-  const rows: ClientRow[] = getClients().map((c) => {
+  const rows: ClientRow[] = clients.map((c) => {
     const oldest = oldestUnsubmitted(visits, c.id);
     return {
       client: c,
       summary: monthSummary(approvals, visits, c.id, month),
-      deadline: oldest
-        ? { status: deadlineStatus(oldest.date), daysLeft: daysLeftToBill(oldest.date) }
-        : null,
+      deadline: oldest ? { status: deadlineStatus(oldest.date), daysLeft: daysLeftToBill(oldest.date) } : null,
     };
   });
 
-  const count = (s: string) => rows.filter((r) => r.summary.status === s).length;
+  const used = rows.reduce((s, r) => s + r.summary.usedHours, 0);
+  const approved = rows.reduce((s, r) => s + r.summary.approvedHours, 0);
+  const needAttention = rows.filter((r) => r.summary.status !== "ok").length;
   const billingRisk = rows.filter((r) => r.deadline && r.deadline.status !== "ok").length;
+  const pick = clients.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName }));
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">Client hours · {formatMonth(month)}</h1>
-        <p className="text-muted">Unused hours do not carry over to next month.</p>
-      </div>
+    <>
+      <section className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-brand">Client management</p>
+          <h1 className="text-3xl font-bold tracking-[-0.035em] text-slate-950 sm:text-[34px]">Hours overview</h1>
+          <p className="mt-2 text-sm text-muted">
+            {formatMonth(month)} · unused hours don&apos;t carry over to next month.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <EditApprovalButton clients={pick} approvals={approvals} visits={visits} />
+          <AddHoursButton clients={pick} approvals={approvals} visits={visits} />
+        </div>
+      </section>
 
-      <section aria-label="Summary" className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile label="On track" value={count("ok")} />
-        <Tile label="Running low" value={count("low")} tone="warn" />
-        <Tile label="Over approved" value={count("over")} tone="bad" />
-        <Tile label="Near 60-day limit" value={billingRisk} tone={billingRisk ? "bad" : undefined} />
+      <section aria-label="Summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Tile label="Active clients" value={String(clients.length)} />
+        <Tile label="Hours used this month" value={formatHours(used)} sub={`of ${formatHours(approved)} h approved`} />
+        <Tile label="Clients needing attention" value={String(needAttention)} sub="over approved or running low" tone={needAttention ? "warn" : undefined} />
+        <Tile label="Near the 60-day billing limit" value={String(billingRisk)} sub="bill these first" tone={billingRisk ? "bad" : undefined} />
       </section>
 
       <ClientTable rows={rows} />
-    </div>
+    </>
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: number; tone?: "warn" | "bad" }) {
-  const color = tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-brand-dark";
+function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "warn" | "bad" }) {
+  const color = tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-slate-900";
   return (
-    <div className="rounded-xl border border-line bg-white p-4">
-      <div className={`text-3xl font-bold ${color}`}>{value}</div>
-      <div className="text-sm text-muted">{label}</div>
+    <div className="rounded-2xl border border-line bg-white p-5">
+      <p className="text-sm font-semibold text-muted">{label}</p>
+      <div className="mt-2 flex items-baseline gap-1.5">
+        <p className={`text-2xl font-bold tracking-tight tabular-nums ${color}`}>{value}</p>
+        {sub && <p className="text-xs font-medium text-muted">{sub}</p>}
+      </div>
     </div>
   );
 }
