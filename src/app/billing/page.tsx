@@ -16,7 +16,7 @@ import { addDays, formatDate, today, validDate } from "@/lib/dates";
 import { settings } from "@/lib/settings";
 import { DeadlineBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Icon";
-import { ClaimActions } from "@/components/ClaimActions";
+import { ClaimActions, CopyAllClaims } from "@/components/ClaimActions";
 import { UndoSubmitted } from "@/components/UndoSubmitted";
 
 export const dynamic = "force-dynamic";
@@ -81,18 +81,24 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
       <div className="flex flex-col gap-4">
         {byClient.map(({ client, claims }) => (
           <section key={client.id} aria-labelledby={`h-${client.id}`} className="rounded-2xl border border-line bg-white p-5">
-            <div className="mb-4 flex items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
               <Avatar name={`${client.firstName} ${client.lastName}`} seed={client.id} />
-              <div>
+              <div className="mr-auto">
                 <h2 id={`h-${client.id}`} className="text-base font-bold text-slate-900">{client.lastName}, {client.firstName}</h2>
                 <p className="text-xs text-muted">ID {client.portalId}</p>
               </div>
+              {claims.length > 1 && <CopyAllClaims client={client} claims={claims} />}
             </div>
             <div className="flex flex-wrap gap-4">
               {claims.map((claim) => (
-                <div key={claim.claimNumber} className="min-w-0 flex-[1_1_340px] rounded-xl border border-line p-4">
+                <div key={claim.lines[0].date} className="min-w-0 flex-[1_1_340px] rounded-xl border border-line p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-bold text-slate-800">Claim {claim.claimNumber} of {claim.ofClaims}</span>
+                    <span className="text-sm font-bold text-slate-800">
+                      Claim {claim.claimNumber} of {claim.ofClaims}
+                      <span className="block text-xs font-semibold text-muted">
+                        {formatDate(claim.lines[0].date)} – {formatDate(claim.lines[claim.lines.length - 1].date)} · {claim.lines.length} days
+                      </span>
+                    </span>
                     <ClaimActions client={client} claim={claim} />
                   </div>
                   <table className="w-full text-sm">

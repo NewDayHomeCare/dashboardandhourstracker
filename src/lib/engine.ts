@@ -156,7 +156,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 /**
  * Turns a client's unsubmitted days in one billing period into portal claims.
- * One line per day; at most maxLinesPerClaim lines per claim.
+ * One line per day; at most linesPerClaim (and never more than maxLinesPerClaim) lines per claim.
  * With splitClaimsByWeek, each week of the period becomes its own claim (7 + 7).
  */
 export function buildClaims(visits: Visit[], clientId: string, periodStart: ISODate): Claim[] {
@@ -176,7 +176,7 @@ export function buildClaims(visits: Visit[], clientId: string, periodStart: ISOD
       ].filter((g) => g.length > 0)
     : [lines];
 
-  const claimLines = groups.flatMap((g) => chunk(g, settings.maxLinesPerClaim));
+  const claimLines = groups.flatMap((g) => chunk(g, Math.min(settings.linesPerClaim, settings.maxLinesPerClaim)));
 
   return claimLines.map((ls, i) => ({
     clientId,

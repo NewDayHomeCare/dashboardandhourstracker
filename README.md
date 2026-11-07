@@ -21,10 +21,10 @@ Demo date, rates, proration and billing settings need verification before real u
 
 The team's Chrome extension is preserved in `extension/`; installation and mock-portal instructions are in [extension/README.md](extension/README.md). Test only with fictional data. The mock portal is in `mock-portal/`.
 
-1. On the dashboard Billing page, click **Copy for helper**. This copies the version-1 JSON format expected by the extension, including only the client identity needed by the portal and daily claim lines.
+1. On the dashboard Billing page, click **Copy for helper** on one claim, or **Copy all N for helper** when a client's period is split into several claims (each claim holds at most `linesPerClaim` = 7 days, so two weeks of daily care is 7 + 7). This copies the version-1 JSON format expected by the extension, including only the client identity needed by the portal and daily claim lines. Each claim's reference is its client and date range (e.g. `c04|2026-11-01..2026-11-07`), so it doesn't change when another claim is submitted.
 2. Paste into the extension and follow its screen-by-screen workflow. Copying or filling does not submit a claim.
 3. Staff review and submit in the actual external portal themselves.
-4. Return to the dashboard, click **Record submission**, and enter the actual reference and submission date. The extension's **Mark submitted** button clears/logs its own claim; it does **not** update this dashboard's database.
+4. Return to the dashboard, click **Record submission** on each claim, and enter the actual reference and submission date. The extension's **Mark submitted** button clears/logs its own claim; it does **not** update this dashboard's database.
 
 The extension and dashboard currently have separate local state. Real-portal compatibility and privacy requirements remain unverified. Do not assume an extension log is an accepted or paid claim.
 
