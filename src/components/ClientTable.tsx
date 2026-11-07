@@ -11,6 +11,7 @@ import { Avatar, Icon } from "./Icon";
 
 export interface ClientRow {
   client: Client;
+  lastServiceDate: string | null;
   summary: MonthSummary;
   deadline: { status: DeadlineStatus; daysLeft: number } | null;
 }
@@ -25,7 +26,7 @@ const FILTERS: { key: ClientStatus | "all"; label: string }[] = [
 const ORDER: Record<ClientStatus, number> = { over: 0, low: 1, ok: 2 };
 const BAR: Record<ClientStatus, string> = { over: "bg-bad", low: "bg-amber-500", ok: "bg-brand" };
 
-export function ClientTable({ rows }: { rows: ClientRow[] }) {
+export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string }) {
   const [filter, setFilter] = useState<ClientStatus | "all">("all");
   const [search, setSearch] = useState("");
 
@@ -79,16 +80,16 @@ export function ClientTable({ rows }: { rows: ClientRow[] }) {
           <thead>
             <tr className="bg-slate-50 text-xs font-bold uppercase tracking-[0.08em] text-muted">
               <th className="px-6 py-4">Client</th>
-              <th className="px-5 py-4 text-right">Approved</th>
+              <th className="px-5 py-4">Last service (selected month)</th><th className="px-5 py-4 text-right">Approved</th>
               <th className="px-5 py-4">Hours used</th>
               <th className="px-5 py-4 text-right">Remaining</th>
-              <th className="px-5 py-4 text-right">Banked</th>
+              <th className="px-5 py-4 text-right">Billed</th><th className="px-5 py-4 text-right">Unbilled</th>
               <th className="px-5 py-4">Status</th>
               <th className="px-5 py-4">Oldest unbilled day</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {shown.map(({ client, summary, deadline }) => {
+            {shown.map(({ client, summary, deadline, lastServiceDate }) => {
               const name = `${client.firstName} ${client.lastName}`;
               const progress = summary.approvedHours > 0 ? Math.min((summary.usedHours / summary.approvedHours) * 100, 100) : 100;
               return (
@@ -97,13 +98,14 @@ export function ClientTable({ rows }: { rows: ClientRow[] }) {
                     <div className="flex items-center gap-3">
                       <Avatar name={name} seed={client.id} />
                       <div>
-                        <Link href={`/clients/${client.id}`} className="whitespace-nowrap text-sm font-bold text-slate-800 underline-offset-2 hover:text-brand hover:underline">
+                        <Link href={`/clients/${client.id}?month=${month}`} className="whitespace-nowrap text-sm font-bold text-slate-800 underline-offset-2 hover:text-brand hover:underline">
                           {client.lastName}, {client.firstName}
                         </Link>
                         <p className="whitespace-nowrap text-xs text-muted">{client.portalId}</p>
                       </div>
                     </div>
                   </td>
+                  <td className="px-5 py-4 text-sm whitespace-nowrap">{lastServiceDate ?? "No service"}</td>
                   <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-700">{formatHours(summary.approvedHours)} h</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
@@ -117,8 +119,9 @@ export function ClientTable({ rows }: { rows: ClientRow[] }) {
                     {formatHours(summary.leftHours)} h
                   </td>
                   <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700">
-                    {summary.bankedHours ? `${formatHours(summary.bankedHours)} h` : <span className="text-muted">—</span>}
+                    {formatHours(summary.billedHours)} h
                   </td>
+                  <td className="px-5 py-4 text-right text-sm tabular-nums">{formatHours(summary.unbilledHours)} h</td>
                   <td className="px-5 py-4"><StatusBadge status={summary.status} /></td>
                   <td className="px-5 py-4">
                     {deadline ? <DeadlineBadge status={deadline.status} daysLeft={deadline.daysLeft} /> : <span className="text-sm text-muted">All billed</span>}
