@@ -178,6 +178,26 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     const result=submitBatch({visits,reference:`LOCAL-${randomUUID()}`,submittedOn:today(),requestId:randomUUID(),confirmed:true});
     return result.ok?visits.length:0;
   }
+  // Undoes "Mark submitted" clicked by mistake, one day at a time. Paid claims stay locked.
+  // A claim left with no days is recorded as returned; otherwise its snapshot drops the undone days.
+  function unmarkSubmitted(ids:string[]):number {
+    return tx(()=>{
+      let count=0;const touched=new Set<string>();const now=new Date().toISOString();
+      for(const id of new Set(ids)){
+        const row=rawVisit(id);if(!row||!row.submitted)continue;
+        if(row.batchId){const batch=db.prepare("SELECT status FROM billing_batches WHERE id=?").get(String(row.batchId));if(batch&&batch.status!=="submitted")continue;touched.add(String(row.batchId));}
+        db.prepare("UPDATE service_entries SET submitted=0,batchId=NULL,updatedAt=? WHERE id=?").run(now,id);
+        audit(String(row.clientId),"submission_undone",id,row,rawVisit(id));count++;
+      }
+      for(const batchId of touched){
+        const batch=db.prepare("SELECT * FROM billing_batches WHERE id=?").get(batchId);if(!batch)continue;
+        const left=(JSON.parse(String(batch.snapshot)) as {id:string}[]).filter(v=>rawVisit(v.id)?.batchId===batchId);
+        if(left.length)db.prepare("UPDATE billing_batches SET snapshot=?,updatedAt=? WHERE id=?").run(JSON.stringify(left),now,batchId);
+        else db.prepare("UPDATE billing_batches SET status='returned',note=?,updatedAt=? WHERE id=?").run("Marked submitted by mistake (undone)",now,batchId);
+      }
+      return count;
+    });
+  }
   function importVisits(rows:{clientId:string;date:string;hours:number}[]) {
     const errors:string[]=[];let imported=0;
     rows.forEach((r,n)=>{const result=setVisitHours(r.clientId,r.date,r.hours);if(result.ok)imported++;else errors.push(`Row ${n+1}: ${result.error}`);});return {imported,errors};
@@ -187,6 +207,6 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     const daily=new Map<string,number>();for(const v of batch.visits)daily.set(v.date,(daily.get(v.date)??0)+hundredths(v.hours));
     return [...daily.values()].reduce((s,h)=>s+costCents(h/100,batch.rateCents),0);
   };
-  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,importVisits,close:()=>db.close()};
+  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,unmarkSubmitted,importVisits,close:()=>db.close()};
 }
 

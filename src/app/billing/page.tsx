@@ -17,6 +17,7 @@ import { settings } from "@/lib/settings";
 import { DeadlineBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Icon";
 import { ClaimActions } from "@/components/ClaimActions";
+import { UndoSubmitted } from "@/components/UndoSubmitted";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,17 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
   const byClient = getClients()
     .map((client) => ({ client, claims: buildClaims(visits, client.id, start) }))
     .filter((x) => x.claims.length > 0);
+
+  // Days already marked submitted, so a mistaken "Mark submitted" can be undone. Paid claims stay locked.
+  const paid = new Set(getBatches().filter((b) => b.status === "paid").map((b) => b.id));
+  const submittedByClient = getClients()
+    .map((client) => ({
+      client,
+      days: visits
+        .filter((v) => v.clientId === client.id && v.submitted && !(v.batchId && paid.has(v.batchId)) && v.date >= start && v.date <= end)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .filter((x) => x.days.length > 0);
 
   const claimCount = byClient.reduce((n, x) => n + x.claims.length, 0);
   const lineCount = byClient.reduce((n, x) => n + x.claims.reduce((m, c) => m + c.lines.length, 0), 0);
@@ -120,6 +132,35 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
           </section>
         ))}
       </div>
+
+      {submittedByClient.length > 0 && (
+        <details className="mt-8 rounded-2xl border border-line bg-white p-5">
+          <summary className="cursor-pointer text-base font-bold text-slate-900">
+            Marked submitted in this period ({submittedByClient.reduce((n, x) => n + x.days.length, 0)} lines)
+          </summary>
+          <p className="mt-2 text-sm text-muted">
+            Marked one by mistake? Undo it to put the days back in a claim above. This doesn&apos;t change anything in the portal.
+          </p>
+          <ul className="mt-4 flex flex-col gap-3">
+            {submittedByClient.map(({ client, days }) => (
+              <li key={client.id} className="rounded-xl border border-line p-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-slate-800">{client.lastName}, {client.firstName}</span>
+                  {days.length > 1 && <UndoSubmitted visitIds={days.map((d) => d.id)} label={`Undo all ${days.length}`} />}
+                </div>
+                <ul className="flex flex-wrap gap-2 text-sm">
+                  {days.map((d) => (
+                    <li key={d.id} className="flex items-center gap-2 rounded-lg bg-slate-50 py-1 pl-3 pr-1">
+                      <span>{formatDate(d.date)} · {formatHours(d.hours)} h</span>
+                      <UndoSubmitted visitIds={[d.id]} label="Undo" />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </>
   );
 }

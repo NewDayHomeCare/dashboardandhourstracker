@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { addApproval, addService, editService, removeService, submitBatch, changeBatchStatus } from "@/lib/data";
+import { addApproval, addService, editService, removeService, submitBatch, changeBatchStatus, unmarkSubmitted } from "@/lib/data";
 import type { ServiceInput, SubmissionInput } from "@/lib/sqlite";
 import { validDate } from "@/lib/dates";
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string; code?: string };
@@ -28,4 +28,9 @@ export async function updateClaimStatus(input:{id:string;status:"paid"|"returned
 export async function deleteDayHours(input:{id:string;expectedHours:number}):Promise<ActionResult> {
   return safely(()=>{const result=removeService(input.id,input.expectedHours);if(!result.ok)return result;
     refresh();return {ok:true,message:"Service deleted. Action retained in history."};});
+}
+
+export async function undoSubmitted(visitIds: string[]): Promise<ActionResult> {
+  return safely(()=>{const n=unmarkSubmitted(visitIds);if(!n)return {ok:false,error:"Nothing to undo. Paid claims can't be undone here. Refresh the page."};
+    refresh();return {ok:true,message:`Moved ${n} line${n===1?"":"s"} back to billing`};});
 }

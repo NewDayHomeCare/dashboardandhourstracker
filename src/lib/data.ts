@@ -14,6 +14,7 @@ export const getVisits = () => database().getVisits();
 export const addApproval = (input: Parameters<ReturnType<typeof openHoursDatabase>["addApproval"]>[0]) => database().addApproval(input);
 export const setVisitHours = (clientId: string, date: string, hours: number, mode: "add" | "replace" = "replace") => database().setVisitHours(clientId, date, hours, mode);
 export const markClaimSubmitted = (ids: string[]) => database().markClaimSubmitted(ids);
+export const unmarkSubmitted = (ids: string[]) => database().unmarkSubmitted(ids);
 export const importVisits = (rows: Parameters<ReturnType<typeof openHoursDatabase>["importVisits"]>[0]) => database().importVisits(rows);
 export const deleteVisit = (clientId: string, date: string) => database().deleteVisit(clientId, date);
 export const addService = (input: Parameters<ReturnType<typeof openHoursDatabase>["addService"]>[0]) => database().addService(input);
