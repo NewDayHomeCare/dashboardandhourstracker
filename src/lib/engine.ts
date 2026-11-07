@@ -128,6 +128,8 @@ export function monthSummary(
     approvedHours,
     usedHours,
     leftHours,
+    billedHours: hoursUsed(visits.filter(v => v.submitted), clientId, month),
+    unbilledHours: hoursUsed(visits.filter(v => !v.submitted), clientId, month),
     bankedHours,
     status: statusFor(approvedHours, leftHours),
   };
@@ -159,13 +161,14 @@ function chunk<T>(items: T[], size: number): T[][] {
  */
 export function buildClaims(visits: Visit[], clientId: string, periodStart: ISODate): Claim[] {
   const end = periodEnd(periodStart);
-  const lines: ClaimLine[] = visits
-    .filter(
-      (v) => v.clientId === clientId && !v.submitted && v.date >= periodStart && v.date <= end,
-    )
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((v) => ({ visitId: v.id, date: v.date, hours: v.hours, costCents: costCents(v.hours) }));
-
+  const daily = new Map<string, Visit[]>();
+  for (const v of visits.filter(v => v.clientId === clientId && !v.submitted && v.date >= periodStart && v.date <= end)) {
+    daily.set(v.date, [...(daily.get(v.date) ?? []), v]);
+  }
+  const lines: ClaimLine[] = [...daily.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, services]) => {
+    const hours = fromHundredths(services.reduce((s, v) => s + toHundredths(v.hours), 0));
+    return { visitId: services[0].id, visitIds: services.map(v => v.id), services: services.map(v => ({ id: v.id, hours: v.hours })), date, hours, costCents: costCents(hours) };
+  });
   const groups = settings.splitClaimsByWeek
     ? [
         lines.filter((l) => daysBetween(periodStart, l.date) < 7),

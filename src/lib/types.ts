@@ -31,7 +31,7 @@ export interface Approval {
   note?: string;
 }
 
-/** One day of care for one client. Billing uses one portal line per day. */
+/** One completed service. Claims aggregate unbilled services by date. */
 export interface Visit {
   id: string;
   clientId: string;
@@ -40,6 +40,10 @@ export interface Visit {
   hours: number;
   /** True once the line has been submitted in the portal. */
   submitted: boolean;
+  note?: string;
+  batchId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type ClientStatus = "ok" | "low" | "over";
@@ -50,6 +54,8 @@ export interface MonthSummary {
   approvedHours: number;
   usedHours: number;
   leftHours: number;
+  billedHours: number;
+  unbilledHours: number;
   /** Part of approvedHours that came from a backdated increase. */
   bankedHours: number;
   status: ClientStatus;
@@ -57,6 +63,8 @@ export interface MonthSummary {
 
 export interface ClaimLine {
   visitId: string;
+  visitIds: string[];
+  services: { id: string; hours: number }[];
   date: ISODate;
   hours: number;
   costCents: number;
@@ -74,3 +82,14 @@ export interface Claim {
 }
 
 export type DeadlineStatus = "ok" | "soon" | "urgent" | "expired";
+
+export interface BillingBatch {
+  id: string; clientId: string; reference: string; submittedOn: string;
+  status: "submitted" | "paid" | "returned"; rateCents: number;
+  visits: { id: string; date: string; hours: number; note?: string }[];
+  createdAt: string; updatedAt: string; note: string;
+}
+export interface AuditEvent {
+  id: string; clientId: string; action: string; targetId: string; at: string;
+  actor: string; beforeJson: string | null; afterJson: string | null;
+}

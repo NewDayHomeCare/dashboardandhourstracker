@@ -1,23 +1,25 @@
+import { MonthPicker } from "@/components/MonthPicker";
 // Hours overview: every client's hours this month. Design from the Figma Make prototype.
 
 import { getApprovals, getClients, getVisits } from "@/lib/data";
 import { daysLeftToBill, deadlineStatus, formatHours, monthSummary, oldestUnsubmitted } from "@/lib/engine";
-import { formatMonth, monthOf, today } from "@/lib/dates";
+import { formatMonth, selectedMonth } from "@/lib/dates";
 import { ClientTable, type ClientRow } from "@/components/ClientTable";
 import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
 
 export const dynamic = "force-dynamic";
 
-export default function Overview() {
-  const month = monthOf(today());
+export default async function Overview({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const month = selectedMonth((await searchParams).month);
   const clients = getClients();
   const approvals = getApprovals();
   const visits = getVisits();
 
   const rows: ClientRow[] = clients.map((c) => {
-    const oldest = oldestUnsubmitted(visits, c.id);
+    const oldest = oldestUnsubmitted(visits.filter(v => v.date.startsWith(month)), c.id);
     return {
       client: c,
+      lastServiceDate: visits.filter(v => v.clientId === c.id && v.date.startsWith(month)).map(v => v.date).sort().at(-1) ?? null,
       summary: monthSummary(approvals, visits, c.id, month),
       deadline: oldest ? { status: deadlineStatus(oldest.date), daysLeft: daysLeftToBill(oldest.date) } : null,
     };
@@ -39,9 +41,10 @@ export default function Overview() {
             {formatMonth(month)} · unused hours don&apos;t carry over to next month.
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <EditApprovalButton clients={pick} approvals={approvals} visits={visits} />
-          <AddHoursButton clients={pick} approvals={approvals} visits={visits} />
+        <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
+          <MonthPicker month={month} />
+          <EditApprovalButton key={`approval-${month}`} month={month} clients={pick} approvals={approvals} visits={visits} />
+          <AddHoursButton key={`hours-${month}`} month={month} clients={pick} approvals={approvals} visits={visits} />
         </div>
       </section>
 
@@ -52,7 +55,8 @@ export default function Overview() {
         <Tile label="Near the 60-day billing limit" value={String(billingRisk)} sub="bill these first" tone={billingRisk ? "bad" : undefined} />
       </section>
 
-      <ClientTable rows={rows} />
+      <p className="mb-3 text-sm text-muted">Used = billed + unbilled. Remaining = approved - used. Billed means submitted, not paid.</p>
+      <ClientTable rows={rows} month={month} />
     </>
   );
 }

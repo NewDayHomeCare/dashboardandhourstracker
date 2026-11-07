@@ -59,3 +59,12 @@ export function formatMonth(month: YearMonth): string {
     year: "numeric",
   });
 }
+
+/** Reject malformed months before doing date calculations. */
+export function selectedMonth(value?: string): YearMonth {
+  return value && /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(value) ? value : monthOf(today());
+}
+
+export function validDate(value: string): boolean {
+  return typeof value === "string" && /^[1-9]\d{3}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
