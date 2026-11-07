@@ -85,7 +85,7 @@ export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string 
               <th className="px-5 py-4 text-right">Remaining</th>
               <th className="px-5 py-4 text-right">Billed</th><th className="px-5 py-4 text-right">Unbilled</th>
               <th className="px-5 py-4">Status</th>
-              <th className="px-5 py-4">Oldest unbilled day</th>
+              <th className="px-5 py-4">Billing deadline (all months)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

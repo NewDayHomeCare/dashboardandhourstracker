@@ -1,17 +1,15 @@
-## Problem and behavior
+## Fixes
 
-Staff need to track completed care separately from whether it has been submitted or paid. The dashboard now persists records locally, separates same-day services, shows monthly balances and billed/unbilled hours, and records external submission batches with references and immutable service snapshots.
-
-Returns release services to unbilled without changing used hours. Full payment changes claim status only. Duplicate requests, likely duplicate entries, stale updates and invalid inputs receive guards. A local change log and database backup command support review and recovery.
+- Keep overdue/approaching unbilled services visible across all months while monthly balances remain isolated. Add dated links to service details and billing periods.
+- Replace hours-only stale checks with persistent integer service revisions for edits, deletes, submissions and UI undo requests. Note-only concurrent changes are no longer silently overwritten.
+- Preserve original claim snapshots when a teammate's partial Undo action is used. Track locally undone IDs separately and display active claim totals accordingly.
+- Default to the real UTC clock. Fixed demonstration dates are opt-in via the documented environment variable and clearly labeled.
+- Display unverified calculation assumptions globally. No rate or allowance policy is claimed as verified.
 
 ## Validation
 
-- Calculation, persistence, schema migration and billing lifecycle automated tests.
-- Lint/type checks and production build.
-- Browser verification: service addition/editing, duplicate confirmation, same-day partial submission, returned claims, full payment, month isolation and persistence.
+Automated regressions cover cross-month deadline queues, unchanged monthly balances, stale note-only edits/deletes/submissions, same-instant version changes, revision persistence, partial undo/resubmission/payment, and existing-ledger migration/backup. Production build and browser workflow checks are required before merging.
 
-## Limits and review points
+## Review
 
-This remains a single-computer prototype with fictional data. No login, verified operator identity, external submission/payment integration, or production deployment. Rate history, monthly authorization rules, deadline rules and actual billing schedule still need confirmation. Partial payments/returns are not implemented.
-
-UI teammate: review shared types, service dialogs, billing controls and monthly pages. Requires Node 24+. SQLite database files and local backups are excluded from Git. See HANDOFF.md.
+Includes current main and preserves Chrome helper support. No import integration, authentication, or real-policy verification is introduced. Review shared Visit/Claim types and UndoSubmitted inputs. SQLite files, backups and .env.local stay out of Git; .env.example is an inert template. Please review this new branch and merge through a PR rather than pushing directly to main.

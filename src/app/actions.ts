@@ -8,8 +8,8 @@ function refresh() { revalidatePath("/", "layout"); }
 async function safely(operation:()=>ActionResult):Promise<ActionResult> {
   try{return operation();}catch{return {ok:false,error:"Could not save locally. Check disk space and file access, then refresh before retrying. No external claim or payment was sent."};}
 }
-export async function saveDayHours(input: ServiceInput & { serviceId?: string; expectedHours?: number }): Promise<ActionResult> {
-  return safely(()=>{const result = input.serviceId ? editService(input.serviceId,input.hours,input.expectedHours??NaN,input.note) : addService(input);
+export async function saveDayHours(input: ServiceInput & { serviceId?: string; expectedHours?: number; expectedVersion?: number }): Promise<ActionResult> {
+  return safely(()=>{const result = input.serviceId ? editService(input.serviceId,input.hours,input.expectedHours??NaN,input.note,input.expectedVersion??0) : addService(input);
     if(!result.ok)return result;
     refresh(); return {ok:true,message:`${input.serviceId?"Updated":"Added"} ${input.hours.toFixed(2)} h on ${input.date}`};});
 }
@@ -25,12 +25,12 @@ export async function updateClaimStatus(input:{id:string;status:"paid"|"returned
   return safely(()=>{const result=changeBatchStatus(input.id,input.status,input.note);if(!result.ok)return result;
     refresh();return {ok:true,message:input.status==="paid"?"Payment recorded locally.":"Claim returned; its services are unbilled again. Used hours have not changed."};});
 }
-export async function deleteDayHours(input:{id:string;expectedHours:number}):Promise<ActionResult> {
-  return safely(()=>{const result=removeService(input.id,input.expectedHours);if(!result.ok)return result;
+export async function deleteDayHours(input:{id:string;expectedHours:number;expectedVersion:number}):Promise<ActionResult> {
+  return safely(()=>{const result=removeService(input.id,input.expectedHours,input.expectedVersion);if(!result.ok)return result;
     refresh();return {ok:true,message:"Service deleted. Action retained in history."};});
 }
 
-export async function undoSubmitted(visitIds: string[]): Promise<ActionResult> {
-  return safely(()=>{const n=unmarkSubmitted(visitIds);if(!n)return {ok:false,error:"Nothing to undo. Paid claims can't be undone here. Refresh the page."};
+export async function undoSubmitted(visits: {id:string;version:number}[]): Promise<ActionResult> {
+  return safely(()=>{const n=unmarkSubmitted(visits.map(v=>v.id),Object.fromEntries(visits.map(v=>[v.id,v.version])));if(!n)return {ok:false,error:"Nothing to undo. Paid claims can't be undone here. Refresh the page."};
     refresh();return {ok:true,message:`Moved ${n} line${n===1?"":"s"} back to billing`};});
 }

@@ -27,3 +27,10 @@ The team's Chrome extension is preserved in `extension/`; installation and mock-
 4. Return to the dashboard, click **Record submission**, and enter the actual reference and submission date. The extension's **Mark submitted** button clears/logs its own claim; it does **not** update this dashboard's database.
 
 The extension and dashboard currently have separate local state. Real-portal compatibility and privacy requirements remain unverified. Do not assume an extension log is an accepted or paid claim.
+
+
+## Latest reliability fixes
+
+The clock now follows the real UTC date by default. A fixed demo date is opt-in: copy the inert .env.example template to .env.local, set NEXT_PUBLIC_HOMECARE_DEMO_DATE, and restart development or rebuild production. The operating notice identifies the clock mode and unverified policy assumptions.
+
+Monthly balances remain month-specific. Billing deadlines and the oldest-unbilled work queue include all months. Record revisions prevent old pages from overwriting notes or deleting changed services. Per-service Undo keeps original claim snapshots intact and tracks locally undone services separately.

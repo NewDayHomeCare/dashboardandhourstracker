@@ -21,6 +21,7 @@ type Shared = {
   defaultDate?: string;
   defaultHours?: number;
   serviceId?: string;
+  expectedVersion?: number;
   buttonLabel?: string;
 };
 
@@ -76,7 +77,7 @@ export function AddHoursButton(props: Shared & { primary?: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             start(async () => {
-              const res = await saveDayHours({ clientId, date, hours: hours.trim() === "" ? Number.NaN : Number(hours), serviceId: props.serviceId, expectedHours: props.defaultHours, requestId, note, confirmDuplicate });
+              const res = await saveDayHours({ clientId, date, hours: hours.trim() === "" ? Number.NaN : Number(hours), serviceId: props.serviceId, expectedHours: props.defaultHours, expectedVersion: props.expectedVersion, requestId, note, confirmDuplicate });
               if (!res.ok) { setDuplicate(res.code === "duplicate"); return setError(res.error); }
               setError("");
               setOpen(false);

@@ -81,7 +81,7 @@ describe("local database", () => {
 
     expect(db.unmarkSubmitted([ids[0]])).toBe(1);
     expect(db.getVisits().find(v => v.id === ids[0])).toMatchObject({ submitted: false, batchId: null });
-    expect(db.getBatches().find(b => b.id === batchId)).toMatchObject({ status: "submitted", visits: [{ id: ids[1] }] });
+    expect(db.getBatches().find(b => b.id === batchId)).toMatchObject({ status: "submitted", visits: ids.map(id=>({id})), voidedVisitIds: [ids[0]] });
     expect(db.unmarkSubmitted([ids[1]])).toBe(1);
     expect(db.getBatches().find(b => b.id === batchId)!.status).toBe("returned");
     expect(db.getAudit("c05").filter(e => e.action === "submission_undone")).toHaveLength(2);
@@ -93,4 +93,3 @@ describe("local database", () => {
     expect(db.getVisits().filter(v => ids.includes(v.id)).every(v => v.submitted)).toBe(true);
   });
 });
-

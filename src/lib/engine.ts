@@ -167,7 +167,7 @@ export function buildClaims(visits: Visit[], clientId: string, periodStart: ISOD
   }
   const lines: ClaimLine[] = [...daily.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, services]) => {
     const hours = fromHundredths(services.reduce((s, v) => s + toHundredths(v.hours), 0));
-    return { visitId: services[0].id, visitIds: services.map(v => v.id), services: services.map(v => ({ id: v.id, hours: v.hours })), date, hours, costCents: costCents(hours) };
+    return { visitId: services[0].id, visitIds: services.map(v => v.id), services: services.map(v => ({ id: v.id, hours: v.hours, version: v.version })), date, hours, costCents: costCents(hours) };
   });
   const groups = settings.splitClaimsByWeek
     ? [
@@ -208,4 +208,10 @@ export function oldestUnsubmitted(visits: Visit[], clientId: string): Visit | un
   return visits
     .filter((v) => v.clientId === clientId && !v.submitted)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
+}
+
+/** Deadline work is independent of whichever month is open in the allowance view. */
+export function unbilledQueue(visits: Visit[], onDate: ISODate = today()) {
+  return visits.filter(v=>!v.submitted).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id))
+    .map(v=>({visit:v,status:deadlineStatus(v.date,onDate),daysLeft:daysLeftToBill(v.date,onDate)}));
 }
