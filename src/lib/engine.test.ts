@@ -112,8 +112,15 @@ describe("billing periods and claims", () => {
     expect(claims[0]).toMatchObject({ claimNumber: 1, ofClaims: 2, totalHours: 14, totalCents: 49042 });
   });
 
+  it("splits into batches of 7 even without the weekly split", () => {
+    settings.splitClaimsByWeek = false;
+    const claims = buildClaims(fourteenDays, "c1", "2026-11-01");
+    expect(claims.map((c) => c.lines.length)).toEqual([7, 7]);
+  });
+
   it("never puts more than 10 lines in a claim", () => {
     settings.splitClaimsByWeek = false;
+    settings.linesPerClaim = 14;
     const claims = buildClaims(fourteenDays, "c1", "2026-11-01");
     expect(claims.map((c) => c.lines.length)).toEqual([10, 4]);
   });

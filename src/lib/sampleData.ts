@@ -91,5 +91,13 @@ export function makeSampleData() {
     visits.push({ id: `c12-${date}`, clientId: "c12", date, hours: 3, submitted: false });
   }
 
-  return { clients, approvals, visits };
+  // Client 5 has daily care for the whole Oct 18–31 period, not billed yet: 14 days that
+  // split into two claims of 7 (shows "Copy all for helper"). Added last so other clients don't change.
+  const daily = visits.filter((v) => !(v.clientId === "c05" && v.date >= "2026-10-18" && v.date <= "2026-10-31"));
+  for (let d = 0; d < 14; d++) {
+    const date = addDays("2026-10-18", d);
+    daily.push({ id: `c05-${date}`, clientId: "c05", date, hours: d % 7 === 5 ? 2.5 : 3, submitted: false });
+  }
+
+  return { clients, approvals, visits: daily };
 }

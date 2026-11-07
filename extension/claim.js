@@ -1,18 +1,41 @@
 // Checks a pasted claim and keeps ONLY the fields the portal needs (data minimisation).
 // Anything else in the pasted text (notes, addresses, diagnoses...) is thrown away.
 
-globalThis.ndParseClaim = function ndParseClaim(text) {
+const MAX_CLAIMS = 6;
+const str = (v, max, re) => typeof v === "string" && v.trim().length > 0 && v.length <= max && (!re || re.test(v));
+
+// Accepts one claim ("newday-claim") or a client's whole period ("newday-claims") and
+// always returns a list of claims, filled one after another.
+globalThis.ndParseClaims = function ndParseClaims(text) {
   let raw;
   try {
     raw = JSON.parse(text);
   } catch {
     throw new Error("That doesn't look like a claim from the dashboard. Copy it again with \"Copy for helper\".");
   }
-  const fail = (why) => { throw new Error(`Claim rejected: ${why}.`); };
-  const str = (v, max, re) => typeof v === "string" && v.trim().length > 0 && v.length <= max && (!re || re.test(v));
+  if (raw?.type === "newday-claim" && raw?.version === 1) return [checkClaim(raw)];
+  if (raw?.type !== "newday-claims" || raw?.version !== 1) throw new Error("Claim rejected: not a New Day claim (version 1).");
+  if (!Array.isArray(raw.claims) || raw.claims.length < 1 || raw.claims.length > MAX_CLAIMS) {
+    throw new Error(`Claim rejected: expected 1 to ${MAX_CLAIMS} claims.`);
+  }
+  const claims = raw.claims.map((c, i) => {
+    try { return checkClaim(c); } catch (e) { throw new Error(`Claim ${i + 1}: ${e.message}`); }
+  });
+  if (new Set(claims.map((c) => c.client.portalId)).size !== 1) throw new Error("Claim rejected: all claims must be for one client.");
+  if (new Set(claims.map((c) => c.claimKey)).size !== claims.length) throw new Error("Claim rejected: the same claim appears twice.");
+  return claims;
+};
 
-  if (raw?.type !== "newday-claim" || raw?.version !== 1) fail("not a New Day claim (version 1)");
-  if (!str(raw.claimKey, 80, /^[\w|:.-]+$/)) fail("missing claim reference");
+globalThis.ndParseClaim = function ndParseClaim(text) {
+  const claims = globalThis.ndParseClaims(text);
+  if (claims.length !== 1) throw new Error("Claim rejected: expected a single claim.");
+  return claims[0];
+};
+
+function checkClaim(raw) {
+  const fail = (why) => { throw new Error(`Claim rejected: ${why}.`); };
+
+  if (!str(raw?.claimKey, 80, /^[\w|:.-]+$/)) fail("missing claim reference");
   const c = raw.client || {};
   if (!str(c.lastName, 100) || !str(c.firstName, 100)) fail("client name missing");
   if (!str(c.portalId, 50, /^[A-Za-z0-9-]+$/)) fail("client ID missing or has odd characters");
@@ -33,4 +56,4 @@ globalThis.ndParseClaim = function ndParseClaim(text) {
     client: { lastName: c.lastName.trim(), firstName: c.firstName.trim(), portalId: c.portalId.trim() },
     lines,
   };
-};
+}

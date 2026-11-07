@@ -1,6 +1,8 @@
 # New Day Claim Helper (Chrome extension, prototype)
 
-Fills one claim from the dashboard into the provider portal, one screen at a time. Staff
+Fills claims from the dashboard into the provider portal, one screen at a time. When a client's
+two weeks are split into several claims (e.g. 7 + 7 days of daily care), they're pasted once and
+filled one after another. Staff
 enter the date of birth, answer the other-coverage question, check every highlighted field,
 and press **Predetermine** and **Process claim** themselves.
 
@@ -20,7 +22,9 @@ again; stops on a bad line and resumes from it; refuses to press Predetermine.
 3. **Enter details:** click **Fill this screen** again. For each day it picks the date in the
    pop-up, chooses the service type, types hours and total cost, and presses **Add claim**.
 4. **Predetermine:** staff check the list and click **Predetermine**, then **Process claim**.
-5. Click **Mark submitted** in the panel. The claim is wiped from the helper.
+5. Click **Mark submitted** in the panel. If more claims were loaded for this client, the next one
+   loads: click **Enter another claim** in the portal and repeat from step 1. After the last claim,
+   everything is wiped from the helper.
 
 ## Try it (5 minutes)
 
@@ -28,8 +32,8 @@ again; stops on a bad line and resumes from it; refuses to press Predetermine.
 2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, choose `extension`.
 3. Click the extension's icon to open the side panel. In Settings, save the group number `GRP-123`
    (the mock portal's sample group).
-4. In the dashboard's **Billing** page, click **Copy for helper** on a claim. Paste it into the
-   panel and click **Load claim**.
+4. In the dashboard's **Billing** page, click **Copy for helper** on a claim, or **Copy all N for
+   helper** for a client with several claims. Paste it into the panel and click **Load**.
 5. Follow the flow above. Sample dates of birth: open `mock-portal/index.html` and look at
    `RECORDS`, or use the returning-patient lookup with the client's name.
 
@@ -41,12 +45,12 @@ After changing extension files, click reload on `chrome://extensions` and reload
 |---|---|
 | Collecting more than needed | `claim.js` keeps only last name, first name, portal ID, and each line's date, hours, cost and service type. Anything else in a pasted claim is dropped. |
 | Date of birth | Never held by the helper. Staff enter it, or the portal's own returning-patient lookup fills it. (Tested: a date of birth in a pasted claim is dropped.) |
-| Data left on the computer | The claim lives in `chrome.storage.session`: memory only, never written to disk, wiped when Chrome closes. Also cleared on **Mark submitted**, **Clear claim**, or after 15 minutes. |
+| Data left on the computer | The claim lives in `chrome.storage.session`: memory only, never written to disk, wiped when Chrome closes. Also cleared on the last **Mark submitted**, **Clear claim**, or after 15 minutes on one claim. |
 | Other code reading it | Session storage is limited to the extension's own pages, so the script inside the portal page can't read it. That script gets the claim only at the moment of filling and keeps nothing. |
 | Data sent somewhere | No network permissions, no remote code, no analytics. The extension cannot send data anywhere. |
 | Running on other sites | Runs only on pages listed in `manifest.json` (localhost now; add only the real portal's address later). |
 | Clipboard | Cleared after a claim is loaded. |
-| Logs | The "submitted" log stores a claim reference (internal client code, period, claim number), line count and time. No names or IDs. |
+| Logs | The "submitted" log stores a claim reference (internal client code and the claim's first and last service dates), line count and time. No names or IDs. |
 | Accidental submission | Never stores passwords. Refuses to press Predetermine, Process claim, Submit or Cancel (`neverClick` in `fieldmap.js`). Presses only "Add claim", which adds a line to the claim being built. |
 | Wrong data | Every filled field is highlighted. Staff review the list and the predetermination before processing. |
 

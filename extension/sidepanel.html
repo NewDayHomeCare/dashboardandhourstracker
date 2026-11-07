@@ -37,15 +37,15 @@
 <body>
 <header>
   <h1>New Day claim helper</h1>
-  <p>Prototype · fills one claim at a time · you check and submit</p>
+  <p>Prototype · fills one claim at a time, then the next · you check and submit</p>
 </header>
 <main>
   <section id="loadSection" aria-labelledby="loadTitle">
-    <h2 id="loadTitle">1. Load a claim</h2>
-    <p class="muted">In the dashboard's Billing page, click "Copy for helper" on a claim, then paste it here.</p>
+    <h2 id="loadTitle">1. Load claims</h2>
+    <p class="muted">In the dashboard's Billing page, click "Copy all for helper" for a client (or "Copy for helper" on one claim), then paste it here.</p>
     <label for="paste">Claim from the dashboard</label>
     <textarea id="paste" spellcheck="false" autocomplete="off"></textarea>
-    <button id="load" class="primary" type="button">Load claim</button>
+    <button id="load" class="primary" type="button">Load</button>
   </section>
 
   <section id="claimSection" aria-labelledby="claimTitle" hidden>
@@ -57,8 +57,9 @@
       <li>Answer the other-coverage question and continue.</li>
       <li>On <strong>Enter details</strong>: click Fill again.</li>
       <li>Check, click <strong>Predetermine</strong>, then <strong>Process claim</strong> in the portal.</li>
-      <li>Click <strong>Mark submitted</strong> here.</li>
+      <li>Click <strong>Mark submitted</strong> here. If the client has another claim, it loads next: start a new claim in the portal and repeat.</li>
     </ol>
+    <p class="muted" id="queue" hidden></p>
     <p class="muted" id="progress"></p>
     <button id="fill" class="primary" type="button">Fill this screen</button>
     <div class="row">

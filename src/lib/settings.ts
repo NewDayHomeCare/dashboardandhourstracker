@@ -5,6 +5,8 @@ export const settings = {
   hourlyRateCents: 3503,
   /** Most lines (days) the portal accepts in one claim. */
   maxLinesPerClaim: 10,
+  /** Lines (days) per claim when splitting a period, so daily care for two weeks becomes 7 + 7. */
+  linesPerClaim: 7,
   /** Split each two-week billing period into one claim per week. TO CONFIRM with Scott. */
   splitClaimsByWeek: true,
   /** Billing runs every 14 days starting from this date. TO CONFIRM the real anchor date. */
