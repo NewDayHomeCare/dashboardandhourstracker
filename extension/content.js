@@ -11,6 +11,16 @@
 (() => {
   const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const tick = () => new Promise((r) => setTimeout(r, 40));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms || 0));
+
+  async function waitFor(check, timeoutMs) {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      if (check()) return true;
+      await sleep(100);
+    }
+    return check();
+  }
   const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
 
   function labelOf(el) {
@@ -115,15 +125,39 @@
 
   async function fillLine(line, index, map) {
     const at = map.lineMode === "rows" ? index : 0;
-    const get = (prefix) => {
-      const el = findFields(prefix)[at];
-      if (!el) throw new Error(`Couldn't find the "${prefix}" box.`);
+    // Look each box up again right before using it: the page may have rebuilt it.
+    const get = (spec) => {
+      const el = findFields(spec)[at];
+      if (!el) throw new Error(`Couldn't find the "${spec.replace(/^name=.*:/, "")}" box.`);
       return el;
     };
+    const service = line.serviceType || map.defaults.serviceType;
     await fillDate(get(map.line.date), line.date, map);
-    if (map.line.serviceType) setValue(get(map.line.serviceType), line.serviceType || map.defaults.serviceType);
+    await sleep(map.fieldDelayMs);
+    if (map.line.serviceType) {
+      setValue(get(map.line.serviceType), service);
+      await sleep(map.fieldDelayMs);
+    }
     setValue(get(map.line.hours), line.hours.toFixed(2));
+    await sleep(map.fieldDelayMs);
     setValue(get(map.line.cost), line.cost);
+    await sleep(map.fieldDelayMs);
+
+    // Check the portal kept what was typed (only our own values are read back).
+    const num = (v) => Number(String(v).replace(/[$,\s]/g, ""));
+    const kept =
+      get(map.line.date).value.includes(line.date) &&
+      num(get(map.line.hours).value) === line.hours &&
+      Math.abs(num(get(map.line.cost).value) - Number(line.cost)) < 0.011 && // allow the portal to work out cost itself
+      (!map.line.serviceType || norm(get(map.line.serviceType).selectedOptions?.[0]?.textContent || get(map.line.serviceType).value) === norm(service));
+    return kept;
+  }
+
+  /** Fills one line, retrying once if the portal dropped a value. */
+  async function fillLineChecked(line, index, map) {
+    if (await fillLine(line, index, map)) return;
+    await sleep(500);
+    if (!(await fillLine(line, index, map))) throw new Error("The portal didn't keep the values. Check the boxes and try again.");
   }
 
   /**
@@ -191,13 +225,24 @@
               safeClick(findButton(map.addLineButton), map);
               await tick();
             }
-            await fillLine(claim.lines[i], i, map);
+            await fillLineChecked(claim.lines[i], i, map);
           } else {
-            await fillLine(claim.lines[i], i, map);
+            await fillLineChecked(claim.lines[i], i, map);
             const add = findButton(map.addLineButton);
             if (!add) throw new Error(`Couldn't find the "${map.addLineButton}" button.`);
             safeClick(add, map);
-            await tick();
+            // Count the line only once the form clears. If the portal shows an error instead,
+            // stop here so nothing is overwritten.
+            // "Cleared" = the date box emptied, or hours went back to empty / 0
+            // (the real portal's hours box starts at 0).
+            const cleared = await waitFor(() => {
+              const d = findFields(map.line.date)[0];
+              const h = findFields(map.line.hours)[0];
+              const hoursReset = !!h && (h.value.trim() === "" || Number(h.value) === 0);
+              return (!!d && d.value.trim() === "") || hoursReset;
+            }, map.addTimeoutMs || 2000);
+            if (!cleared) throw new Error(`"${map.addLineButton}" didn't go through. Check the portal for a message, fix it, then click Fill again.`);
+            await sleep(map.fieldDelayMs);
           }
           added++;
         } catch (e) {
@@ -222,13 +267,69 @@
 
   globalThis.ndFillPage = fillPage; // used by the automated test
 
+  // ---------- One line at a time, for portals that reload the page after "Add claim" ----------
+  // The side panel drives these: detect the screen, fill one line and press Add claim, then ask
+  // for the status (repeatedly, while the page reloads) until the form comes back empty.
+
+  const PAGE_ID = Math.random().toString(36).slice(2); // changes every time the page loads
+
+  function detect(map = globalThis.ND_FIELD_MAP) {
+    if (findFields(map.patient.portalId).length) return "patient";
+    if (map.line && findFields(map.line.hours).length) return "lines";
+    return "none";
+  }
+
+  async function fillOneLine(claim, index, map = globalThis.ND_FIELD_MAP) {
+    if (detect(map) !== "lines") return { ok: false, error: "This isn't the Enter claim screen." };
+    const line = claim.lines[index];
+    if (!line) return { ok: false, error: "No such line." };
+    try {
+      await fillLineChecked(line, index, map);
+      const add = findButton(map.addLineButton);
+      if (!add) return { ok: false, error: `Couldn't find the "${map.addLineButton}" button.` };
+      const text = norm(add.getAttribute("aria-label") || add.textContent || add.value);
+      if (map.neverClick.some((n) => text.startsWith(norm(n)))) return { ok: false, error: `Refused to press "${text}".` };
+      // Answer first, then press: the page may reload and cut the answer off.
+      setTimeout(() => add.click(), 150);
+      return { ok: true, pageId: PAGE_ID };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  /** Reads back only the date and hours boxes, to tell whether the line went in. */
+  function status(expect, map = globalThis.ND_FIELD_MAP) {
+    const stage = detect(map);
+    if (stage !== "lines") return { stage, pageId: PAGE_ID, cleared: false, stillFilled: false };
+    const d = findFields(map.line.date)[0];
+    const h = findFields(map.line.hours)[0];
+    const hoursValue = h ? h.value.trim() : "";
+    const cleared = (!!d && d.value.trim() === "") || hoursValue === "" || Number(hoursValue) === 0;
+    const stillFilled = !!d && d.value.includes(expect?.date) && Number(hoursValue) === Number(expect?.hours);
+    return { stage, pageId: PAGE_ID, cleared, stillFilled };
+  }
+
   if (globalThis.chrome?.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (sender.id !== chrome.runtime.id || msg?.type !== "nd-fill") return;
-      fillPage(msg.claim, msg.groupNumber, msg.startAt || 0)
-        .then(sendResponse)
-        .catch((e) => sendResponse({ stage: "error", added: 0, problems: [e.message], message: "" }));
-      return true; // answer asynchronously
+      if (sender.id !== chrome.runtime.id) return;
+      if (msg?.type === "nd-detect") {
+        sendResponse({ stage: detect(), pageId: PAGE_ID });
+        return;
+      }
+      if (msg?.type === "nd-status") {
+        sendResponse(status(msg.expect));
+        return;
+      }
+      if (msg?.type === "nd-fill-line") {
+        fillOneLine(msg.claim, msg.index).then(sendResponse);
+        return true;
+      }
+      if (msg?.type === "nd-fill") {
+        fillPage(msg.claim, msg.groupNumber, msg.startAt || 0)
+          .then(sendResponse)
+          .catch((e) => sendResponse({ stage: "error", added: 0, problems: [e.message], message: "" }));
+        return true; // answer asynchronously
+      }
     });
   }
 })();

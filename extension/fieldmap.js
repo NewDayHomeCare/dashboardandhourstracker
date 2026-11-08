@@ -20,13 +20,25 @@ const REAL_PORTAL = {
     returning: null,
   },
 
-  // TODO: record the enter-details screen and fill these in.
-  line: null,
+  // Enter claim screen (enterMultiRoleClaim.jspx), recorded from the real portal on Nov 8.
+  line: {
+    date: "name=enterMultiRoleClaimPage:serviceDate", // text box, YYYY-MM-DD, accepts typing
+    serviceType: "name=enterMultiRoleClaimPage:sproducts", // Personal care / Respite / Homemaking
+    hours: "name=enterMultiRoleClaimPage:cdcHours",
+    cost: "name=enterMultiRoleClaimPage:price", // "Total cost ($)": number only, no $ sign
+  },
   lineMode: "entry-form",
-  addLineButton: "",
+  addLineButton: "Add claim",
 
+  // The date box accepts typing, so the pop-up is never used.
   datePicker: { open: "", next: "", previous: "", dayLabel: "{YYYY}-{MM}-{DD}" },
-  defaults: { serviceType: "" },
+  defaults: { serviceType: "Personal care" },
+
+  // The real portal may refresh parts of the page after a field changes (Oracle ADF), so the
+  // helper waits between fields and waits for the form to clear after "Add claim".
+  fieldDelayMs: 300,
+  addTimeoutMs: 8000,
+
   neverClick: ["Predetermine", "Process claim", "Submit", "Cancel", "Delete"],
 };
 
@@ -59,8 +71,10 @@ const MOCK_PORTAL = {
     // How the pop-up labels each day button. {Month} {D} {YYYY} {MM} {DD} are filled in.
     dayLabel: "{Month} {D}, {YYYY}",
   },
-  // Used when a claim line doesn't say. TO CONFIRM with Scott which service types he bills.
+  // Used when a claim line doesn't say.
   defaults: { serviceType: "Personal care" },
+  fieldDelayMs: 0,
+  addTimeoutMs: 2000,
   // Buttons the helper must never press. Staff press these themselves.
   neverClick: ["Predetermine", "Process claim", "Submit", "Cancel"],
 };
