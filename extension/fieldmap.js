@@ -1,17 +1,46 @@
-// Where each value goes on the portal screens, found by each field's visible label.
-// Set up for the mock portal, which follows the steps in Alberta Blue Cross's public
-// Hospital Providers User Guide. When you see the real screens, change ONLY this file.
-// A label matches if the field's label (or aria-label) STARTS WITH this text, ignoring case.
+// Where each value goes on the portal screens. There is one map per site; the helper picks the
+// one whose `match` fits the page address. Change ONLY this file to adapt to screen changes.
+//
+// How a field is found:
+//   "name=findPatientPage:IDNumber"  -> the field's internal name, exactly (most reliable)
+//   "ID number"                      -> label, aria-label or placeholder STARTS WITH this text
+//
+// The helper never holds a client's date of birth. Either the portal's own returning-patient
+// lookup fills it, or staff type it. The helper only ever clears that box.
 
-globalThis.ND_FIELD_MAP = {
-  // Patient lookup screen. Date of birth is deliberately left out: staff enter it or use the
-  // portal's returning-patient lookup, so the helper never holds a client's date of birth.
+const REAL_PORTAL = {
+  // Alberta Blue Cross provider portal. Patient screen recorded from the real portal on Nov 8.
+  patient: {
+    portalId: "name=findPatientPage:IDNumber",
+    groupNumber: "name=findPatientPage:group",
+    dateOfBirth: "name=findPatientPage:dob",
+    // The real name search is ONE box ("Last name, First name") that probably suggests matches
+    // as you type. Not automated yet: we need to see how its suggestions work. Until then the
+    // helper fills ID + group number and staff type the date of birth.
+    returning: null,
+  },
+
+  // TODO: record the enter-details screen and fill these in.
+  line: null,
+  lineMode: "entry-form",
+  addLineButton: "",
+
+  datePicker: { open: "", next: "", previous: "", dayLabel: "{YYYY}-{MM}-{DD}" },
+  defaults: { serviceType: "" },
+  neverClick: ["Predetermine", "Process claim", "Submit", "Cancel", "Delete"],
+};
+
+const MOCK_PORTAL = {
   patient: {
     portalId: "Patient ID number",
     groupNumber: "Group number",
+    dateOfBirth: "Date of birth",
+    returning: {
+      lastName: "Last name",
+      firstName: "First name",
+      findButton: "Find returning patient",
+    },
   },
-
-  // Enter details screen.
   line: {
     date: "Date of service",
     serviceType: "Service type",
@@ -22,19 +51,24 @@ globalThis.ND_FIELD_MAP = {
   // "rows": every line has its own row of boxes on screen.
   lineMode: "entry-form",
   addLineButton: "Add claim",
-
   datePicker: {
     // Used only when the date box won't accept typing.
     open: "Choose date",
     next: "Next month",
     previous: "Previous month",
-    // How the pop-up labels each day button. {Month} {D} {YYYY} are filled in.
+    // How the pop-up labels each day button. {Month} {D} {YYYY} {MM} {DD} are filled in.
     dayLabel: "{Month} {D}, {YYYY}",
   },
-
   // Used when a claim line doesn't say. TO CONFIRM with Scott which service types he bills.
   defaults: { serviceType: "Personal care" },
-
   // Buttons the helper must never press. Staff press these themselves.
   neverClick: ["Predetermine", "Process claim", "Submit", "Cancel"],
 };
+
+globalThis.ND_FIELD_MAPS = [
+  { name: "Alberta Blue Cross provider portal", match: /^https:\/\/provider\.ab\.bluecross\.ca\//, map: REAL_PORTAL },
+  { name: "Mock portal", match: /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//, map: MOCK_PORTAL },
+];
+
+globalThis.ND_FIELD_MAP =
+  (globalThis.ND_FIELD_MAPS.find((m) => m.match.test(location.href)) || globalThis.ND_FIELD_MAPS[1]).map;

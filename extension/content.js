@@ -2,7 +2,9 @@
 // screen that's open, then stop. Staff move between screens and press the important buttons.
 //
 // Privacy rules this file follows:
-// - It never reads client information from the page and never sends anything anywhere.
+// - It never sends anything anywhere and never stores anything.
+// - The only thing it reads from the page is the patient ID box after a returning-patient
+//   lookup, to check the portal found the same client. It compares and moves on.
 // - It never stores anything. The claim arrives in a message, is typed in, and is dropped.
 // - It never presses Predetermine, Process claim, Submit or Cancel (see neverClick in fieldmap.js).
 
@@ -18,19 +20,25 @@
       if (l) return l.textContent;
     }
     const wrap = el.closest("label");
-    return wrap ? wrap.textContent : "";
+    if (wrap) return wrap.textContent;
+    return el.getAttribute("placeholder") || el.getAttribute("title") || "";
   }
 
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
 
-  function findFields(prefix) {
-    const p = norm(prefix);
+  function findFields(spec) {
+    if (!spec) return [];
+    if (spec.startsWith("name=")) {
+      return [...document.querySelectorAll(`[name="${CSS.escape(spec.slice(5))}"]`)].filter(visible);
+    }
+    const p = norm(spec);
     return [...document.querySelectorAll("input, select, textarea")].filter((el) => visible(el) && norm(labelOf(el)).startsWith(p));
   }
 
   function findButton(prefix, scope = document) {
+    if (!prefix) return undefined;
     const p = norm(prefix);
-    return [...scope.querySelectorAll("button, [role=button], input[type=button]")].find(
+    return [...scope.querySelectorAll("button, [role=button], input[type=button], input[type=submit]")].find(
       (b) => visible(b) && norm(b.getAttribute("aria-label") || b.textContent || b.value).startsWith(p),
     );
   }
@@ -63,7 +71,12 @@
 
   function dayLabel(iso, template) {
     const [y, m, d] = iso.split("-").map(Number);
-    return template.replace("{Month}", MONTHS[m - 1]).replace("{D}", String(d)).replace("{YYYY}", String(y));
+    return template
+      .replace("{Month}", MONTHS[m - 1])
+      .replace("{MM}", String(m).padStart(2, "0"))
+      .replace("{DD}", String(d).padStart(2, "0"))
+      .replace("{D}", String(d))
+      .replace("{YYYY}", String(y));
   }
 
   async function fillDate(input, iso, map) {
@@ -122,10 +135,38 @@
 
     // Patient lookup screen
     if (findFields(map.patient.portalId).length) {
+      const after = "Click Search, answer the other-coverage question, then click Fill again on the Enter details screen.";
+      let triedLookup = false;
       try {
+        // 1. Try the portal's returning-patient lookup by name.
+        const r = map.patient.returning;
+        const findBtn = r && findButton(r.findButton);
+        triedLookup = !!findBtn;
+        if (findBtn && findFields(r.lastName).length && findFields(r.firstName).length) {
+          setValue(findFields(r.lastName)[0], claim.client.lastName);
+          setValue(findFields(r.firstName)[0], claim.client.firstName);
+          safeClick(findBtn, map);
+          await tick();
+          await tick();
+          const idBox = findFields(map.patient.portalId)[0];
+          if (idBox && norm(idBox.value) === norm(claim.client.portalId)) {
+            [map.patient.portalId, map.patient.groupNumber, map.patient.dateOfBirth]
+              .map((l) => findFields(l)[0])
+              .forEach((el) => el && el.value && highlight(el));
+            return {
+              stage: "patient",
+              added: 0,
+              problems,
+              message: `Found ${claim.client.firstName} ${claim.client.lastName} with the portal's returning-patient lookup. Check the ID, group number and date of birth it filled. ${after}`,
+            };
+          }
+        }
+        // 2. Not found, or found someone else: fill ID and group, clear any date of birth.
         setValue(findFields(map.patient.portalId)[0], claim.client.portalId);
         if (groupNumber) setValue(findFields(map.patient.groupNumber)[0], groupNumber);
         else problems.push("Group number isn't set in the helper's Settings.");
+        const dob = findFields(map.patient.dateOfBirth)[0];
+        if (dob && dob.value) setValue(dob, "");
       } catch (e) {
         problems.push(e.message);
       }
@@ -133,13 +174,12 @@
         stage: "patient",
         added: 0,
         problems,
-        message:
-          "Filled patient ID and group number. Enter the date of birth (or use the returning-patient lookup), click Search, answer the other-coverage question, then click Fill again on the Enter details screen.",
+        message: `${triedLookup ? "The returning-patient lookup didn't find this client's ID, so the helper" : "The helper"} filled the ID and group number. Type the date of birth. ${after}`,
       };
     }
 
     // Enter details screen
-    if (findFields(map.line.hours).length) {
+    if (map.line && findFields(map.line.hours).length) {
       if (startAt >= claim.lines.length) {
         return { stage: "lines", added: 0, problems, message: `All ${claim.lines.length} services are already added. Check the list, then click Predetermine.` };
       }
