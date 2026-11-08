@@ -108,7 +108,7 @@
         <div class="date"><input id="sdate" readonly placeholder="Choose a date"><button type="button" id="pick" aria-label="Choose date">Choose date</button></div></div>
       <div><label for="stype">Service type</label>
         <select id="stype"><option value="">Select…</option><option>Personal care</option><option>Respite</option><option>Homemaking</option></select></div>
-      <div><label for="shours">Hours</label><input id="shours" inputmode="decimal"></div>
+      <div><label for="shours">Hours</label><input id="shours" inputmode="decimal" value="0"></div>
       <div><label for="scost">Total cost</label><input id="scost" inputmode="decimal"></div>
     </div>
     <div class="actions"><button type="button" id="add">Add claim</button><button type="button" class="primary" id="predetermine">Predetermine</button></div>
@@ -148,11 +148,21 @@
   const $ = (id) => document.getElementById(id);
   let step = 1, services = [], picker = null, patient = null;
 
+  // Like the real portal, "Add claim" reloads the whole page. The mock keeps its place across
+  // reloads in sessionStorage (this tab only, cleared by Cancel or Enter another claim).
+  const KEY = "mockPortalState";
+  const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; } catch { return {}; } };
+  const save = (extra = {}) => { try { sessionStorage.setItem(KEY, JSON.stringify({ step, patient, services, ...extra })); } catch {} };
+  const forget = () => { try { sessionStorage.removeItem(KEY); } catch {} };
+  const DEMO_TODAY = "2026-11-07";
+  const OLDEST_ALLOWED = (() => { const d = new Date(DEMO_TODAY + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 60); return d.toISOString().slice(0, 10); })();
+
   $("samples").innerHTML = Object.entries(RECORDS)
     .map(([id, r]) => `<tr><td>${id}</td><td>${r.last}, ${r.first}</td><td>${r.dob}</td></tr>`).join("");
 
   function go(n) {
     step = n;
+    save();
     $("sampleBox").hidden = n !== 1;
     document.querySelectorAll("[data-step]").forEach((s) => (s.hidden = Number(s.dataset.step) !== n));
     [...$("steps").children].forEach((li, i) => (i + 1 === n ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current")));
@@ -168,7 +178,7 @@
   $("search").onclick = () => {
     const r = RECORDS[$("pid").value.trim()];
     if (!r || $("grp").value.trim() !== GROUP || $("dob").value !== r.dob) return say("m1", "No patient matches that ID, group number and date of birth.", false);
-    patient = r; $("patientLine").textContent = `Patient: ${r.first} ${r.last}`; go(2);
+    patient = r; go(2); $("patientLine").textContent = `Patient: ${r.first} ${r.last}`;
   };
   $("continue").onclick = () => {
     const cob = document.querySelector('input[name="cob"]:checked');
@@ -203,16 +213,23 @@
   $("pick").onclick = openPicker;
   document.addEventListener("keydown", (e) => e.key === "Escape" && closePicker());
 
+  function showServices() {
+    $("services").innerHTML = services.map((s, i) => `<tr><td>${i + 1}</td><td>${s.date}</td><td>${s.type}</td><td>${s.hours}</td><td>${s.cost}</td></tr>`).join("");
+  }
+
   $("add").onclick = () => {
     const s = { date: $("sdate").value, type: $("stype").value, hours: $("shours").value, cost: $("scost").value };
-    if (!s.date || !s.type || !s.hours || !s.cost) return say("m3", "Fill in date, service type, hours and total cost before Add claim.", false);
-    if (services.length >= 10) return say("m3", "A claim can have at most 10 services.", false);
-    services.push(s);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${services.length}</td><td>${s.date}</td><td>${s.type}</td><td>${s.hours}</td><td>${s.cost}</td>`;
-    $("services").appendChild(tr);
-    ["sdate", "shours", "scost"].forEach((id) => ($(id).value = "")); $("stype").value = "";
-    say("m3", `Service ${services.length} added.`, true);
+    if (!s.date || !s.type || !Number(s.hours) || !s.cost) return say("m3", "Fill in date, service type, hours and total cost before Add claim.", false);
+    let error = "";
+    if (services.length >= 10) error = "A claim can have at most 10 services.";
+    else if (s.date < OLDEST_ALLOWED) error = `Service date ${s.date} is more than 60 days ago (mock rule).`;
+    // Simulate the server: reload the page shortly after, like the real portal.
+    $("add").textContent = "Adding…";
+    setTimeout(() => {
+      if (error) save({ flash: { text: error, ok: false }, keep: s }); // rejected: page comes back with the values kept
+      else { services.push(s); save({ flash: { text: `Service ${services.length} added.`, ok: true } }); }
+      location.reload();
+    }, 400);
   };
   $("predetermine").onclick = () => {
     if (!services.length) return say("m3", "Add at least one service first.", false);
@@ -221,10 +238,20 @@
     go(4);
   };
   $("modify").onclick = () => go(3);
-  $("cancel").onclick = () => location.reload();
+  $("cancel").onclick = () => { forget(); location.reload(); };
   $("process").onclick = () => go(5);
-  $("again").onclick = () => location.reload();
-  go(1);
+  $("again").onclick = () => { forget(); location.reload(); };
+
+  // Restore where we were before the reload.
+  const st = load();
+  services = st.services || [];
+  patient = st.patient || null;
+  showServices();
+  go(st.step || 1);
+  if (patient) $("patientLine").textContent = `Patient: ${patient.first} ${patient.last}`;
+  if (st.keep) { $("sdate").value = st.keep.date; $("stype").value = st.keep.type; $("shours").value = st.keep.hours; $("scost").value = st.keep.cost; }
+  if (st.flash) say("m3", st.flash.text, st.flash.ok);
+  if (st.flash || st.keep) save(); // show the message once
 </script>
 </body>
 </html>
