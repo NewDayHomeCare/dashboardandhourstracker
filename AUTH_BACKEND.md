@@ -4,6 +4,38 @@ The backend uses Google sign-in and an explicit email allowlist. Staff do not cr
 
 ## Local setup
 
+### Current demo status and GitHub changes
+
+The Google authentication backend was merged into `main` in PR #25 (merge commit `d891497`). It includes protected pages and data operations, an approved-email policy, session handling, and authenticated audit actors. The temporary login screen is functional; final login UI integration and a visible dashboard logout button remain UI tasks.
+
+The team has configured local development sign-in. The shared Render deployment is a fictional-data demo, not an approved real-client deployment. This does not imply that every account and the full acceptance checklist below have been verified.
+
+Changes to `.env.local`, Google Cloud test users/callback URIs, or Render environment variables are configuration changes, not source-code changes. They do not appear in `git status` and do not automatically sync to teammates. Keep secrets and SQLite databases out of GitHub. The merged feature branch does not need another code change just to distribute these settings.
+
+### Teammate quick start: localhost demo
+
+1. Update the project from GitHub's `main` branch. Install Node.js 24 or later.
+2. Obtain the development Google client ID and client secret through an approved private sharing method. Teammates can use the team's existing web OAuth client; they do not need to create another Google Cloud project.
+3. Create `.env.local` next to `package.json`, using `.env.example` as the template. If an existing local file is provided privately, verify that it is not named `.env.local.txt`; preserve any local database path settings appropriate to this computer.
+4. Set `AUTH_URL=http://localhost:3000`, the two Google client values, a random `AUTH_SECRET` of at least 32 characters, and the approved email list. Prefer a separate session secret per developer computer. Use the exact Google account email; configure each environment's allowlist independently.
+5. Confirm that this account is both an approved dashboard email and, while applicable, a Google OAuth test user. The existing Google client must include `http://localhost:3000/api/auth/callback/google` as an authorized redirect URI.
+6. Run `npm ci`, then `npm run dev -- --hostname 127.0.0.1 --port 3000`. Stop an older dashboard process first if port 3000 is occupied; do not silently move to another port without updating the origin and Google callback settings.
+7. Open `http://localhost:3000`, then select **Continue with Google**. Restart the local server after configuration changes. To check anonymous access, use a private browser window: an existing login session can otherwise make the dashboard open without prompting again.
+
+Each developer runs a separate local SQLite database. Code updates and a shared OAuth client do not synchronize client records. Updating Render's settings does not update a developer's `.env.local`, or vice versa.
+
+### Local storage versus the Render demo
+
+SQLite is stored on the machine running the backend. With the default configuration, a locally running dashboard uses that computer's `data/homecare.sqlite`; the Render dashboard uses a file on Render's server. The local database is not uploaded just by pushing application code. Records entered into the hosted dashboard are sent to its backend and stored there.
+
+The current free Render demo uses ephemeral storage: restarts, redeployments, or service spin-down can discard the SQLite file. Use fictional records only. Do not import real company schedules or client CSV files. Google sign-in processes staff identity information; it does not require sending client care records to Google.
+
+If company policy requires client records to stay on company equipment, the real-client deployment must run on approved company equipment or another explicitly approved architecture. The current Render demo is not that deployment. Installation/automatic startup, multi-user access, backups, and final privacy requirements remain delivery work.
+
+For hosted OAuth, the configured HTTPS origin and matching `/api/auth/callback/google` URI must be set in Render and the same Google OAuth client. Keep the localhost callback as well for developer testing. Configure secrets through the hosting service, never repository files.
+
+### Initial Google client setup (project owner only)
+
 Use Node.js 24 or later. Run `npm ci`. Copy `.env.example` to `.env.local` only if `.env.local` does not already exist; preserve existing local settings and secrets. Never commit this file or OAuth credential downloads.
 
 In a Google Cloud project owned by the team:
@@ -13,7 +45,7 @@ In a Google Cloud project owned by the team:
 3. Create an OAuth client with application type **Web application**.
 4. Set the authorized redirect URI to exactly `http://localhost:3000/api/auth/callback/google`.
 5. Put the client ID and client secret in `.env.local` as `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. These are app credentials, not anyone's Google password. Do not paste secrets into issues, source code, or group chat.
-6. Set `AUTH_URL=http://localhost:3000`, a randomly generated `AUTH_SECRET` of at least 32 characters, and `AUTH_ALLOWED_EMAILS` to the exact approved Google emails separated by commas. A local secret and the three requested test emails have already been configured on the current development computer; Google client credentials remain to be supplied.
+6. Set `AUTH_URL=http://localhost:3000`, a randomly generated `AUTH_SECRET` of at least 32 characters, and `AUTH_ALLOWED_EMAILS` to the exact approved Google emails separated by commas. These values are configured privately per environment; do not rely on another developer's local settings being present automatically.
 7. Run `npm run dev`, then open `http://localhost:3000/login`.
 
 If a fresh secret is needed, generate one with `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"` and store it privately in `.env.local`. Do not replace an existing secret casually: changing it invalidates existing sessions.
@@ -53,7 +85,7 @@ Do not build a password field or store Google tokens in localStorage. Use the pr
 
 Automated tests cover policy checks, session expiry and removal, protected reads/writes, and audit identity, alongside the existing hours and billing tests. A separate local browser smoke test uses synthetic encrypted sessions and an isolated fictional database to verify anonymous rejection, approved-session access, rejected/tampered/expired sessions, canonical-host enforcement, logout, and incomplete configuration. Synthetic sessions do **not** verify Google's actual authorization callback.
 
-Before calling the Google integration complete, configure real client credentials and manually verify:
+Before accepting a newly configured environment, manually verify with its real Google client credentials:
 
 1. An approved test account can complete Google's sign-in and return to the dashboard.
 2. A Google account outside the dashboard allowlist is denied.
@@ -61,6 +93,6 @@ Before calling the Google integration complete, configure real client credential
 4. Removing an account from the loaded allowlist denies its existing session after restart.
 5. A real staff modification records that staff email in the client's audit history.
 
-Keep the work on `feat/google-staff-login` for teammate review. Do not merge it into `main` automatically.
+The backend feature is already merged. Keep follow-up code and documentation changes on new branches for teammate review. Remaining work includes final login/logout UI, completion of the acceptance checks for each target environment, and a company-approved production deployment and storage plan.
 
 Official references: [Auth.js Google provider](https://authjs.dev/getting-started/providers/google), [Google web-server OAuth setup](https://developers.google.com/identity/protocols/oauth2/web-server).
