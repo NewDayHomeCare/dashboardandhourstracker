@@ -1,14 +1,20 @@
 // Side panel logic.
 //
 // Where data lives:
-// - The current claim: chrome.storage.session (memory only, never on disk, gone when Chrome
-//   closes) and cleared after "Mark submitted", "Clear claim" or 15 minutes, whichever is first.
+// - The current claims: chrome.storage.session (memory only, never on disk, gone when Chrome
+//   closes) and cleared after the last "Mark submitted", "Clear claim", or 15 minutes without
+//   activity, whichever is first. A client's claims are filled one after another.
 // - Group number and the submitted log: chrome.storage.local. Neither contains client names.
 // - Nothing is ever sent over the network. The extension has no permission to do so.
 
 const CLEAR_AFTER_MS = 15 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
-let current = null; // { claim, loadedAt }
+let current = null; // { claims, index, claim, loadedAt, added }
+
+// Logo: hide the slot if the image file isn't in the extension folder.
+const logo = $("logo");
+logo.addEventListener("error", () => (logo.hidden = true));
+if (logo.complete && !logo.naturalWidth) logo.hidden = true;
 
 function say(text, ok = true) {
   const m = $("message");
@@ -41,6 +47,9 @@ function render() {
       return [dt, dd];
     }),
   );
+  const many = current.claims.length > 1;
+  $("queue").hidden = !many;
+  $("queue").textContent = `Claim ${current.index + 1} of ${current.claims.length} for this client`;
   $("progress").textContent = `Services added in the portal: ${current.added || 0} of ${claim.lines.length}`;
   updateExpiry();
 }
@@ -75,12 +84,16 @@ async function renderLog() {
 
 $("load").addEventListener("click", async () => {
   try {
-    const claim = ndParseClaim($("paste").value);
-    current = { claim, loadedAt: Date.now(), added: 0 };
+    const claims = ndParseClaims($("paste").value); // one claim, or a client's whole period
+    current = { claims, index: 0, claim: claims[0], loadedAt: Date.now(), added: 0 };
     await chrome.storage.session.set({ claim: current });
     $("paste").value = "";
     navigator.clipboard?.writeText("").catch(() => {}); // don't leave client details on the clipboard
-    say("Claim loaded. Open Enter claim in the portal, then click Fill this screen.");
+    say(
+      claims.length > 1
+        ? `${claims.length} claims loaded for this client. Start with claim 1: open Enter claim in the portal, then click Fill this screen.`
+        : "Claim loaded. Open Enter claim in the portal, then click Fill this screen.",
+    );
     render();
   } catch (e) {
     say(e.message, false);
@@ -187,8 +200,22 @@ $("done").addEventListener("click", async () => {
   const { log = [] } = await chrome.storage.local.get("log");
   log.push({ claimKey: current.claim.claimKey, lines: current.claim.lines.length, at: Date.now() });
   await chrome.storage.local.set({ log: log.slice(-200) });
-  await clearClaim("Cleared from the helper. Now click Mark submitted on this claim in the dashboard's Billing page, so the dashboard counts these days as billed.");
   renderLog();
+  const dashboardNote = "Also click Mark submitted on it in the dashboard's Billing page, so the dashboard counts these days as billed.";
+
+  if (current.index + 1 < current.claims.length) {
+    // Next claim for the same client. Activity resets the 15-minute timer.
+    current.index += 1;
+    current.claim = current.claims[current.index];
+    current.added = 0;
+    current.loadedAt = Date.now();
+    await chrome.storage.session.set({ claim: current });
+    render();
+    say(`Claim ${current.index} logged. ${dashboardNote} Claim ${current.index + 1} of ${current.claims.length} is ready: start a new claim in the portal, then click Fill this screen.`);
+    return;
+  }
+  const all = current.claims.length > 1;
+  await clearClaim(`${all ? "All claims" : "Claim"} logged and cleared from the helper. ${all ? dashboardNote.replace("on it", "on them") : dashboardNote}`);
 });
 
 $("clear").addEventListener("click", () => clearClaim("Claim cleared."));
@@ -201,6 +228,7 @@ $("saveGroup").addEventListener("click", async () => {
 (async () => {
   const { claim } = await chrome.storage.session.get("claim");
   current = claim || null;
+  if (current && !current.claims) current = { ...current, claims: [current.claim], index: 0 }; // saved by an older version
   const { groupNumber = "" } = await chrome.storage.local.get("groupNumber");
   $("group").value = groupNumber;
   render();
