@@ -1,5 +1,7 @@
 # New Day Homecare - Local Hours Dashboard
 
+Synthetic CSV samples for schedule-import development are in [fixtures/csv/synthetic](fixtures/csv/synthetic/README.md). They contain invented records only; the daily schedule schema is a proposed test format, not a verified AxisCare export.
+
 See [HANDOFF.md](HANDOFF.md) for architecture, test coverage, limitations, backups and team handoff. This single-computer prototype uses fictional data and is not ready for real client operations.
 
 ## Quick start
