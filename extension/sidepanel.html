@@ -3,86 +3,144 @@
 <head>
 <meta charset="utf-8">
 <title>Claim helper</title>
+<!-- Look from the team's mockup. Font and logo are packaged in the extension: nothing is loaded from the internet. -->
 <style>
-  :root { --brand:#1769e0; --ink:#182334; --muted:#5b6678; --line:#e2e8f0; --bad:#b42318; --good:#146c43; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.5 system-ui, sans-serif; color:var(--ink); background:#f5f7fb; }
-  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 16px; }
-  header h1 { margin:0; font-size:16px; }
-  header p { margin:2px 0 0; font-size:13px; color:var(--muted); }
-  main { padding:14px 16px; display:flex; flex-direction:column; gap:14px; }
-  section { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; }
-  h2 { margin:0; font-size:15px; }
-  label { font-weight:600; font-size:14px; }
-  input, textarea { width:100%; font:inherit; font-size:14px; border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; }
-  textarea { min-height:90px; font-family: ui-monospace, monospace; font-size:12px; }
-  button { font:inherit; font-weight:700; min-height:44px; border-radius:10px; border:1px solid #cbd5e1; background:#fff; color:var(--ink); cursor:pointer; padding:0 14px; }
-  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
-  button:disabled { opacity:.55; cursor:default; }
-  .muted { color:var(--muted); font-size:13px; margin:0; }
-  .msg { border-radius:8px; padding:10px; font-size:14px; margin:0; }
-  .msg.good { background:#e7f6ee; color:var(--good); }
-  .msg.bad { background:#fef0ef; color:var(--bad); }
+  @font-face { font-family:"DM Sans"; font-weight:400; font-display:swap; src:url("fonts/dm-sans-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family:"DM Sans"; font-weight:500; font-display:swap; src:url("fonts/dm-sans-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family:"DM Sans"; font-weight:700; font-display:swap; src:url("fonts/dm-sans-latin-700-normal.woff2") format("woff2"); }
+
+  :root {
+    --green:#307663; --green-dark:#255f50; --heading:#255b4d; --label:#234b40; --ink:#183d34;
+    --muted:#566260; --cream:#fef3e8; --card-line:#ecded0; --field-line:#c9d7d1;
+    --gold:#f7d68f; --good-bg:#eaf5ed; --good-line:#d6eadc; --good:#286a4d;
+    --bad-bg:#fef0ef; --bad-line:#f6d2ce; --bad:#a3271b;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; color:var(--ink);
+    font:14px/1.5 "DM Sans", system-ui, sans-serif;
+    background:radial-gradient(circle at 98% 1%, rgb(239 190 101 / 16%), transparent 26%), var(--cream);
+  }
+  button, input, textarea { font:inherit; }
+
+  /* Header */
+  .brand-header { position:relative; display:flex; align-items:center; gap:14px; padding:20px; overflow:hidden; background:var(--green); }
+  .brand-header::after { position:absolute; right:-42px; bottom:-60px; width:170px; height:130px; content:""; border:1px solid rgb(255 210 119 / 24%); border-radius:50%; }
+  .brand-logo { position:relative; z-index:1; width:58px; height:55px; flex:0 0 auto; object-fit:cover; border:1px solid rgb(255 255 255 / 12%); border-radius:14px; box-shadow:0 8px 20px rgb(19 69 57 / 28%); background:#fff; }
+  .brand-header > div { position:relative; z-index:1; min-width:0; }
+  .brand-header h1 { margin:0; color:#fffaf4; font-size:19px; font-weight:700; line-height:1.2; letter-spacing:-0.02em; }
+  .brand-header p { margin:6px 0 0; color:rgb(255 250 244 / 92%); font-size:12.5px; line-height:1.45; }
+
+  /* Layout */
+  main { display:grid; gap:14px; padding:14px; }
+  .card { display:flex; flex-direction:column; gap:12px; padding:18px; border:1px solid var(--card-line); border-radius:16px; background:#fff; box-shadow:0 5px 18px rgb(78 55 31 / 6%); }
+  .section-heading { display:flex; align-items:center; gap:9px; }
+  .step-number { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; border-radius:50%; background:var(--gold); color:var(--heading); font-size:13px; font-weight:700; }
+  h2 { margin:0; color:var(--heading); font-size:17px; font-weight:700; line-height:1.3; letter-spacing:-0.015em; }
+  .section-copy, .muted { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+  label { display:block; color:var(--label); font-size:13px; font-weight:700; line-height:1.4; }
+
+  /* Fields and buttons */
+  input, textarea { width:100%; border:1px solid var(--field-line); border-radius:10px; outline:none; background:#fffdfb; color:var(--ink); font-size:14px; transition:border-color 150ms ease, box-shadow 150ms ease; }
+  textarea { display:block; min-height:104px; padding:12px; resize:vertical; font-family:ui-monospace, monospace; font-size:12px; }
+  input { height:44px; padding:0 13px; }
+  input:focus, textarea:focus { border-color:var(--green); box-shadow:0 0 0 3px rgb(48 118 99 / 16%); }
+  button { display:inline-flex; min-height:44px; align-items:center; justify-content:center; padding:0 18px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:background 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
+  button.primary { border:0; background:var(--green); color:#fff; box-shadow:0 4px 10px rgb(48 118 99 / 18%); }
+  button.primary:hover { background:var(--green-dark); box-shadow:0 6px 15px rgb(48 118 99 / 24%); transform:translateY(-1px); }
+  button.primary:active { transform:translateY(0); }
+  button.secondary { border:1px solid var(--field-line); background:#fff; color:var(--heading); }
+  button.secondary:hover { background:#f6faf8; }
+  button:disabled { opacity:.55; cursor:default; transform:none; }
+  :focus-visible { outline:3px solid rgb(48 118 99 / 35%); outline-offset:2px; }
+  .full { width:100%; }
   .row { display:flex; gap:8px; flex-wrap:wrap; }
   .row > * { flex:1 1 auto; }
-  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:14px; }
+
+  /* Claim details */
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:14px; }
   dt { color:var(--muted); }
-  dd { margin:0; font-weight:600; }
-  ol { margin:0; padding-left:20px; font-size:14px; }
-  ul.log { margin:0; padding:0; list-style:none; font-size:13px; color:var(--muted); }
-  :focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+  dd { margin:0; font-weight:700; color:var(--ink); }
+  ol { margin:0; padding-left:20px; color:var(--ink); font-size:13px; line-height:1.55; }
+  ol li + li { margin-top:3px; }
+  .pill { align-self:flex-start; padding:4px 10px; border-radius:999px; background:var(--gold); color:var(--heading); font-size:12.5px; font-weight:700; }
+  .progress { margin:0; font-size:13px; font-weight:700; color:var(--heading); }
+
+  /* Messages */
+  .msg { margin:0; padding:12px 15px; border:1px solid var(--good-line); border-radius:12px; background:var(--good-bg); color:var(--good); font-size:13px; font-weight:500; line-height:1.45; }
+  .msg.bad { border-color:var(--bad-line); background:var(--bad-bg); color:var(--bad); }
+
+  /* Session log */
+  ul.log { display:grid; gap:6px; margin:2px 0 0; padding:0; color:var(--muted); font-size:12.5px; line-height:1.45; list-style:none; }
+  ul.log li { overflow-wrap:anywhere; }
+  ul.log:empty::after { content:"Nothing submitted yet."; }
+
   [hidden] { display:none !important; }
 </style>
 </head>
 <body>
-<header>
-  <h1>New Day claim helper</h1>
-  <p>Prototype · fills one claim at a time, then the next · you check and submit</p>
+<header class="brand-header">
+  <img class="brand-logo" id="logo" src="new-day-home-care-logo.png" alt="">
+  <div>
+    <h1>New Day claim helper</h1>
+    <p>Prototype · fills one claim at a time, then the next · you check and submit</p>
+  </div>
 </header>
+
 <main>
-  <section id="loadSection" aria-labelledby="loadTitle">
-    <h2 id="loadTitle">1. Load claims</h2>
-    <p class="muted">In the dashboard's Billing page, click "Copy all for helper" for a client (or "Copy for helper" on one claim), then paste it here.</p>
-    <label for="paste">Claim from the dashboard</label>
-    <textarea id="paste" spellcheck="false" autocomplete="off"></textarea>
-    <button id="load" class="primary" type="button">Load</button>
+  <section class="card" id="loadSection" aria-labelledby="loadTitle">
+    <div class="section-heading">
+      <span class="step-number" aria-hidden="true">1</span>
+      <h2 id="loadTitle">Load claims</h2>
+    </div>
+    <p class="section-copy">In the dashboard's Billing page, click "Copy all for helper" for a client (or "Copy for helper" on one claim), then paste it here.</p>
+    <div>
+      <label for="paste" style="margin-bottom:8px">Claim from the dashboard</label>
+      <textarea id="paste" spellcheck="false" autocomplete="off"></textarea>
+    </div>
+    <button id="load" class="primary full" type="button">Load</button>
   </section>
 
-  <section id="claimSection" aria-labelledby="claimTitle" hidden>
-    <h2 id="claimTitle">2. Fill the portal</h2>
+  <section class="card" id="claimSection" aria-labelledby="claimTitle" hidden>
+    <div class="section-heading">
+      <span class="step-number" aria-hidden="true">2</span>
+      <h2 id="claimTitle">Fill the portal</h2>
+    </div>
+    <p class="pill" id="queue" hidden></p>
     <dl id="summary"></dl>
-    <p class="muted" id="expiry"></p>
     <ol>
-      <li>On <strong>Patient</strong>: click Fill, enter date of birth, click Search.</li>
+      <li>On <strong>Patient</strong>: click Fill, check the details, click Search.</li>
       <li>Answer the other-coverage question and continue.</li>
-      <li>On <strong>Enter details</strong>: click Fill again.</li>
+      <li>On <strong>Enter claim</strong>: click Fill again.</li>
       <li>Check, click <strong>Predetermine</strong>, then <strong>Process claim</strong> in the portal.</li>
       <li>Click <strong>Mark submitted</strong> here. If the client has another claim, it loads next: start a new claim in the portal and repeat.</li>
     </ol>
-    <p class="muted" id="queue" hidden></p>
-    <p class="muted" id="progress"></p>
-    <button id="fill" class="primary" type="button">Fill this screen</button>
+    <p class="progress" id="progress"></p>
+    <button id="fill" class="primary full" type="button">Fill this screen</button>
     <div class="row">
-      <button id="done" type="button">Mark submitted</button>
-      <button id="clear" type="button">Clear claim</button>
+      <button id="done" class="secondary" type="button">Mark submitted</button>
+      <button id="clear" class="secondary" type="button">Clear claim</button>
     </div>
+    <p class="muted" id="expiry"></p>
   </section>
 
   <p id="message" class="msg" role="status" aria-live="polite" hidden></p>
 
-  <section aria-labelledby="settingsTitle">
+  <section class="card" aria-labelledby="settingsTitle">
     <h2 id="settingsTitle">Settings</h2>
-    <label for="group">Group number (same for every client)</label>
-    <div class="row">
-      <input id="group" autocomplete="off">
-      <button id="saveGroup" type="button" style="flex:0 0 auto">Save</button>
+    <div>
+      <label for="group" style="margin-bottom:8px">Group number (same for every client)</label>
+      <div class="row">
+        <input id="group" autocomplete="off">
+        <button id="saveGroup" class="primary" type="button" style="flex:0 0 auto">Save</button>
+      </div>
     </div>
   </section>
 
-  <section aria-labelledby="logTitle">
+  <section class="card" aria-labelledby="logTitle">
     <h2 id="logTitle">Submitted this session</h2>
-    <p class="muted">Kept on this computer without names: claim reference, line count and time only.</p>
-    <ul class="log" id="log"></ul>
+    <p class="section-copy">Kept on this computer without names: claim reference, line count and time only.</p>
+    <ul class="log" id="log" aria-label="Claims submitted this session"></ul>
   </section>
 </main>
 <script src="claim.js"></script>
