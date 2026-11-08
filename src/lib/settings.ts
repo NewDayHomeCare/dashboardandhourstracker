@@ -17,8 +17,12 @@ export const settings = {
   billingDeadlineDays: 60,
   deadlineSoonDays: 45,
   deadlineUrgentDays: 55,
-  /** A client is "running low" when fewer than this share of approved hours are left. */
-  lowShare: 0.15,
+  /** Unscheduled days are estimated from the hours used in this many days. */
+  projectionLookbackDays: 28,
+  /** "Hours left unused" when used + projected is below this share of approved hours (the goal is to use them all). */
+  unusedShare: 0.9,
+  /** How far ahead care can be scheduled. */
+  maxScheduleDaysAhead: 62,
   /** Optional demo clock. Rebuild when changing this public environment variable. */
   demoToday: demoDateFromEnvironment(process.env.NEXT_PUBLIC_HOMECARE_DEMO_DATE),
 };

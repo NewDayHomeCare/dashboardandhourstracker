@@ -1,15 +1,20 @@
 @import "tailwindcss";
 
-/* Design from the team's Figma Make prototype, with contrast raised to WCAG AA. */
+/* New Day green and yellow, from the team's Figma Make design, with contrast raised to WCAG AA. */
 @theme inline {
-  --color-brand: #1769e0;
-  --color-brand-hover: #1257bd;
-  --color-brand-dark: #0d47a1;
-  --color-brand-soft: #e8f0fd;
+  --color-brand: #207d63;
+  --color-brand-hover: #1d6650;
+  --color-brand-dark: #1d5a48;
+  --color-brand-soft: #e3f2ec;
+  --color-brand-light: #9fd8bf;
+  --color-sidebar: #307663;
+  --color-sidebar-head: #3f7565;
+  --color-accent: #facb0b;
+  --color-on-accent: #1d4f40;
   --color-ink: #182334;
-  --color-muted: #5b6678;
+  --color-muted: #566170;
   --color-line: #e2e8f0;
-  --color-page: #f5f7fb;
+  --color-page: #fef6ee;
   --color-good: #146c43;
   --color-good-soft: #e7f6ee;
   --color-warn: #8a4b00;

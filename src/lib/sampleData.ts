@@ -1,7 +1,7 @@
 // 40 made-up clients for development and the demo. No real people or IDs.
 // Replace with the CSV import once it exists. The same data is generated every time.
 
-import type { Approval, Client, Visit } from "./types";
+import type { Approval, Client, ScheduledDay, Visit } from "./types";
 import { addDays } from "./dates";
 
 function rng(seed: number) {
@@ -44,9 +44,12 @@ export function makeSampleData() {
     while (careDays.size < daysPerWeek) careDays.add(Math.floor(rand() * 7));
     const usualHours = pick(HOURS);
 
-    let monthly = Math.round((usualHours * daysPerWeek * 31) / 7 / 5) * 5 + 10;
-    if (i === 3 || i === 17) monthly = Math.round(usualHours * daysPerWeek * 0.6); // will go over
-    if (i === 8 || i === 25 || i === 31) monthly = Math.ceil(usualHours * daysPerWeek) + 2; // running low
+    const usualMonth = (usualHours * daysPerWeek * 30) / 7;
+    let monthly = Math.round(usualMonth * 1.06); // a little above their usual month
+    if (i === 3 || i === 17) monthly = Math.round(usualHours * daysPerWeek * 0.6); // already over
+    if (i === 8 || i === 25 || i === 31) monthly = Math.ceil(usualHours * daysPerWeek) + 2; // nearly used up after a week
+    if (i === 5 || i === 22) monthly = Math.round(usualMonth * 0.85); // schedule runs over
+    if (i === 12 || i === 29) monthly = Math.round(usualMonth * 1.5); // hours left unused
 
     approvals.push({
       id: `${id}-a1`,
@@ -99,5 +102,17 @@ export function makeSampleData() {
     daily.push({ id: `c05-${date}`, clientId: "c05", date, hours: d % 7 === 5 ? 2.5 : 3, submitted: false });
   }
 
-  return { clients, approvals, visits: daily };
+  // Two of every three clients have the rest of November scheduled, repeating their usual week.
+  // The others have nothing scheduled, so the dashboard estimates from their recent pace.
+  const schedule: ScheduledDay[] = [];
+  for (const c of clients) {
+    if ((Number(c.id.slice(1)) - 1) % 3 === 2) continue;
+    const lastWeek = daily.filter((v) => v.clientId === c.id && v.date > addDays(TODAY, -7) && v.date <= TODAY);
+    for (let date = addDays(TODAY, 1); date <= "2026-11-30"; date = addDays(date, 1)) {
+      const sameDay = lastWeek.find((v) => addDays(v.date, 7) === date || addDays(v.date, 14) === date || addDays(v.date, 21) === date);
+      if (sameDay) schedule.push({ clientId: c.id, date, hours: sameDay.hours });
+    }
+  }
+
+  return { clients, approvals, visits: daily, schedule };
 }

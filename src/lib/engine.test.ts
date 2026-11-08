@@ -6,9 +6,10 @@ import {
   monthSummary,
   monthlyAllowance,
   periodStartFor,
+  repeatDates,
 } from "./engine";
 import { settings } from "./settings";
-import type { Approval, Visit } from "./types";
+import type { Approval, ScheduledDay, Visit } from "./types";
 
 const approval = (p: Partial<Approval>): Approval => ({
   id: p.id ?? Math.random().toString(36),
@@ -77,11 +78,53 @@ describe("hours left", () => {
     expect(s.status).toBe("over");
   });
 
-  it("flags a client running low", () => {
-    const visits = [visit("2026-11-02", 36)];
-    const s = monthSummary([approval({ monthlyHours: 40 })], visits, "c1", "2026-11");
-    expect(s.leftHours).toBe(4);
-    expect(s.status).toBe("low");
+  const nov = (day: number) => `2026-11-${String(day).padStart(2, "0")}`;
+  const days = (from: number, to: number, hours: number) => Array.from({ length: to - from + 1 }, (_, i) => visit(nov(from + i), hours));
+  const plan = (from: number, to: number, hours: number): ScheduledDay[] =>
+    Array.from({ length: to - from + 1 }, (_, i) => ({ clientId: "c1", date: nov(from + i), hours }));
+  const TODAY = "2026-11-07";
+
+  it("projects from scheduled care, and calls using every approved hour on track", () => {
+    const s = monthSummary([approval({ monthlyHours: 60 })], days(1, 7, 2), "c1", "2026-11", plan(8, 30, 2), TODAY);
+    expect(s).toMatchObject({ usedHours: 14, scheduledHours: 46, projectedHours: 46, projectionSource: "schedule", projectedTotal: 60, projectedLeft: 0, status: "on-track" });
+  });
+
+  it("warns before a client goes over, when used + scheduled is more than approved", () => {
+    const s = monthSummary([approval({ monthlyHours: 60 })], days(1, 7, 2), "c1", "2026-11", plan(8, 30, 2.5), TODAY);
+    expect(s).toMatchObject({ usedHours: 14, projectedTotal: 71.5, projectedLeft: -11.5, status: "will-go-over" });
+    expect(s.leftHours).toBe(46); // not over yet
+  });
+
+  it("estimates the days after the last scheduled day from the last 4 weeks", () => {
+    // 14 h in the last 28 days = 0.5 h/day; Nov 15-30 is 16 unscheduled days = 8 h
+    const s = monthSummary([approval({ monthlyHours: 60 })], days(1, 7, 2), "c1", "2026-11", plan(8, 14, 2), TODAY);
+    expect(s).toMatchObject({ scheduledHours: 14, projectedHours: 22, projectionSource: "schedule+pace", projectedTotal: 36, status: "unused" });
+  });
+
+  it("estimates from recent pace when nothing is scheduled", () => {
+    // 0.5 h/day for the 23 days left in November
+    const s = monthSummary([approval({ monthlyHours: 30 })], days(1, 7, 2), "c1", "2026-11", [], TODAY);
+    expect(s).toMatchObject({ projectedHours: 11.5, projectionSource: "pace", projectedTotal: 25.5, status: "unused" });
+    const heavy = monthSummary([approval({ monthlyHours: 40 })], [visit("2026-11-02", 36)], "c1", "2026-11", [], TODAY);
+    expect(heavy.status).toBe("will-go-over"); // 36 h in a week, on pace for about 66
+  });
+
+  it("ignores scheduled days up to today, and other clients' schedules", () => {
+    const s = monthSummary([approval({})], days(1, 7, 2), "c1", "2026-11", [...plan(5, 7, 3), { clientId: "c2", date: nov(20), hours: 5 }, ...plan(20, 20, 1)], TODAY);
+    expect(s).toMatchObject({ scheduledHours: 1, usedHours: 14 });
+  });
+
+  it("projects only scheduled care in a later month, and nothing in a month that has ended", () => {
+    const december: ScheduledDay[] = [1, 2, 3].map((d) => ({ clientId: "c1", date: `2026-12-0${d}`, hours: 2 }));
+    expect(monthSummary([approval({})], days(1, 7, 2), "c1", "2026-12", december, TODAY)).toMatchObject({ projectedHours: 6, projectionSource: "schedule" });
+    expect(monthSummary([approval({})], [visit("2026-10-05", 2)], "c1", "2026-10", december, TODAY)).toMatchObject({ usedHours: 2, projectedHours: 0, projectionSource: "none" });
+  });
+
+  it("repeats a day for 14 days or until the end of the month", () => {
+    expect(repeatDates("2026-11-25", "14-days")).toHaveLength(14);
+    expect(repeatDates("2026-11-25", "14-days").at(-1)).toBe("2026-12-08");
+    expect(repeatDates("2026-11-25", "end-of-month")).toEqual(["2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29", "2026-11-30"]);
+    expect(repeatDates("2026-11-25", "none")).toEqual(["2026-11-25"]);
   });
 
   it("does not carry unused hours into the next month", () => {

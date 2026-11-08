@@ -5,10 +5,11 @@
 
 import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import type { Approval, Client, Visit } from "@/lib/types";
-import { formatHours, monthSummary } from "@/lib/engine";
-import { monthOf, today } from "@/lib/dates";
-import { saveApproval, saveDayHours } from "@/app/actions";
+import type { Approval, Client, MonthSummary, ScheduledDay, Visit } from "@/lib/types";
+import { formatHours, monthSummary, repeatDates, type Repeat } from "@/lib/engine";
+import { addDays, formatMonth, monthOf, today } from "@/lib/dates";
+import { settings } from "@/lib/settings";
+import { saveApproval, saveDayHours, saveRepeatedHours } from "@/app/actions";
 import { Icon } from "./Icon";
 import { Modal, Toast, fieldClass, labelClass, primaryButton, secondaryButton } from "./Modal";
 
@@ -16,6 +17,7 @@ type Shared = {
   clients: Pick<Client, "id" | "firstName" | "lastName">[];
   approvals: Approval[];
   visits: Visit[];
+  schedule?: ScheduledDay[];
   defaultClientId?: string;
   month?: string;
   defaultDate?: string;
@@ -34,6 +36,17 @@ function useToast() {
       window.setTimeout(() => setMessage(""), 2800);
     },
   };
+}
+
+/** "used → used", for the before/after previews. */
+function Change({ label, from, to, bad }: { label: string; from: number; to: number; bad?: boolean }) {
+  return <p>{label}: {formatHours(from)} → <span className={bad ? "font-bold text-bad" : "font-semibold"}>{formatHours(to)} h</span></p>;
+}
+
+function projectionNote(s: MonthSummary) {
+  if (s.status === "over" || s.status === "will-go-over") return <p className="font-semibold text-bad">Used + projected would be {formatHours(-s.projectedLeft)} h over approved.</p>;
+  if (s.status === "unused") return <p className="text-warn">{formatHours(s.projectedLeft)} h would likely be left unused.</p>;
+  return null;
 }
 
 function ClientSelect({ clients, value, onChange, disabled }: { clients: Shared["clients"]; value: string; onChange: (v: string) => void; disabled?: boolean }) {
@@ -62,22 +75,48 @@ export function AddHoursButton(props: Shared & { primary?: boolean }) {
   const [note, setNote] = useState("");
   const [duplicate, setDuplicate] = useState(false);
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+  const [repeat, setRepeat] = useState<Repeat>("none");
 
+  const schedule = props.schedule ?? [];
   const editing = props.defaultHours !== undefined;
   const existing = props.visits.find(v => v.id === props.serviceId);
+  const latest = addDays(today(), settings.maxScheduleDaysAhead);
+  const multi = !editing && repeat !== "none";
+  const scheduling = !editing && !multi && date > today();
+  const scheduledThere = schedule.find(d => d.clientId === clientId && d.date === date);
+  const h = Number(hours);
+  const validHours = hours.trim() !== "" && Number.isFinite(h) && h > 0;
+
+  // What the month looks like before and after saving, using the same engine as the dashboard.
+  const preview = (() => {
+    if (!validHours || existing?.submitted || !clientId) return null;
+    const recorded = new Set(props.visits.filter(v => v.clientId === clientId).map(v => v.date));
+    let visits = props.visits;
+    let planned = schedule;
+    if (editing) visits = visits.map(v => (v.id === props.serviceId ? { ...v, hours: h } : v));
+    else for (const d of repeatDates(date, repeat)) {
+      if (d <= today()) { if (!multi || !recorded.has(d)) visits = [...visits, { id: `preview-${d}`, clientId, date: d, hours: h, submitted: false }]; }
+      else planned = [...planned.filter(p => !(p.clientId === clientId && p.date === d)), { clientId, date: d, hours: h }];
+    }
+    const month = monthOf(date);
+    return { month, before: monthSummary(props.approvals, props.visits, clientId, month, schedule), after: monthSummary(props.approvals, visits, clientId, month, planned) };
+  })();
 
   return (
     <>
-      <button type="button" onClick={() => { setOpen(true); setRequestId(crypto.randomUUID()); setHours(props.defaultHours?.toString() ?? ""); setNote(existing?.note ?? ""); setDuplicate(false); setConfirmDuplicate(false); setError(""); setConfirmDuplicate(false); }} className={props.primary === false ? secondaryButton : primaryButton}>
+      <button type="button" onClick={() => { setOpen(true); setRequestId(crypto.randomUUID()); setHours(props.defaultHours?.toString() ?? ""); setNote(existing?.note ?? ""); setRepeat("none"); setDuplicate(false); setConfirmDuplicate(false); setError(""); }} className={props.primary === false ? secondaryButton : primaryButton}>
         <Icon name="plus" size={18} /> {props.buttonLabel ?? "Add hours"}
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Edit service hours" : "Add completed service hours"} description={editing ? "Edit this service only. Other services on the same date are unchanged." : "Add completed care, including care recorded after its service date. New hours are Unbilled."}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Edit service hours" : scheduling ? "Schedule care" : "Add client hours"} description={editing ? "Edit this service only. Other services on the same date are unchanged." : "Record completed care, or pick a later date to schedule care ahead. Scheduled care counts toward projected hours and is never billed; record the hours once the visit happens."}>
         <form
           className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             start(async () => {
-              const res = await saveDayHours({ clientId, date, hours: hours.trim() === "" ? Number.NaN : Number(hours), serviceId: props.serviceId, expectedHours: props.defaultHours, expectedVersion: props.expectedVersion, requestId, note, confirmDuplicate });
+              const value = hours.trim() === "" ? Number.NaN : Number(hours);
+              const res = multi || scheduling
+                ? await saveRepeatedHours({ clientId, date, hours: value, repeat, requestId, note })
+                : await saveDayHours({ clientId, date, hours: value, serviceId: props.serviceId, expectedHours: props.defaultHours, expectedVersion: props.expectedVersion, requestId, note, confirmDuplicate });
               if (!res.ok) { setDuplicate(res.code === "duplicate"); return setError(res.error); }
               setError("");
               setOpen(false);
@@ -90,10 +129,20 @@ export function AddHoursButton(props: Shared & { primary?: boolean }) {
           <ClientSelect disabled={Boolean(props.defaultClientId)} clients={props.clients} value={clientId} onChange={(v) => { setClientId(v); setError(""); setConfirmDuplicate(false); }} />
           <div>
             <label htmlFor="date" className={labelClass}>Date of service</label>
-            <input disabled={editing} id="date" type="date" max={today()} value={date} onChange={(e) => { setDate(e.target.value); setError(""); setConfirmDuplicate(false); }} className={fieldClass} />
+            <input disabled={editing} id="date" type="date" max={editing ? today() : latest} value={date} onChange={(e) => { setDate(e.target.value); setError(""); setConfirmDuplicate(false); }} className={fieldClass} />
           </div>
+          {!editing && (
+            <div>
+              <label htmlFor="repeat" className={labelClass}>Repeat</label>
+              <select id="repeat" value={repeat} onChange={(e) => { setRepeat(e.target.value as Repeat); setError(""); }} className={fieldClass}>
+                <option value="none">Just this day</option>
+                <option value="14-days">Every day for 14 days</option>
+                <option value="end-of-month">Every day until the end of the month</option>
+              </select>
+            </div>
+          )}
           <div>
-            <label htmlFor="hours" className={labelClass}>{editing ? "Hours for this service" : "Completed service hours"}</label>
+            <label htmlFor="hours" className={labelClass}>{editing ? "Hours for this service" : multi ? "Hours each day" : scheduling ? "Scheduled hours" : "Completed service hours"}</label>
             <div className="relative">
               <input
                 id="hours"
@@ -110,30 +159,33 @@ export function AddHoursButton(props: Shared & { primary?: boolean }) {
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">hours</span>
             </div>
             <p id="hours-help" className="mt-2 text-sm text-muted">
-              {existing
+              {multi
+                ? "Days up to today are added as completed services; days that already have hours are skipped. Later days are scheduled, replacing any schedule already there."
+                : scheduling
+                ? scheduledThere ? `Currently scheduled: ${formatHours(scheduledThere.hours)} h. Saving replaces it.` : "Counts toward projected hours. Record the completed hours once the visit happens."
+                : existing
                 ? existing.submitted
                   ? "This day is marked submitted. If that was a mistake, undo it on the Billing page first."
                   : `Already recorded: ${formatHours(existing.hours)} h on ${date}. ${editing ? "Saving changes this service only." : "A separate service record will be created."}`
                 : "Decimals are fine, for example 5.25."}
             </p>
           </div>
-          {!existing?.submitted && hours.trim() !== "" && Number.isFinite(Number(hours)) && Number(hours) > 0 && (() => {
-            const previous = props.visits.filter(v => v.clientId === clientId && v.date === date).reduce((sum,v) => sum + Math.round(v.hours * 100),0) / 100;
-            const next = Math.round((previous + Number(hours) - (editing ? (existing?.hours ?? 0) : 0)) * 100) / 100;
-            const summary = monthSummary(props.approvals, props.visits, clientId, monthOf(date));
-            return <div className="rounded-xl bg-brand-soft p-3 text-sm" aria-label="Save preview">
-              <p>Service date: {date} · Month: {monthOf(date)}</p>
-              <p>Daily total: {formatHours(previous)} → {formatHours(next)} h</p>
-              <p>Monthly remaining: {formatHours(summary.leftHours)} → {formatHours(summary.leftHours - (next - previous))} h</p>
-              <p>Billing status: Unbilled. No external claim is submitted.</p>
-            </div>;
-          })()}
-          <label className={labelClass}>Service note (optional)<input aria-label="Service note" className={fieldClass} value={note} maxLength={1000} onChange={e=>setNote(e.target.value)}/></label>
+          {preview && (
+            <div className="rounded-xl bg-brand-soft p-3 text-sm" aria-label="Save preview" aria-live="polite">
+              <p className="font-semibold">{formatMonth(preview.month)}{multi && repeatDates(date, repeat).some(d => monthOf(d) !== preview.month) ? " (the days in later months are saved too)" : ""}</p>
+              <Change label="Used" from={preview.before.usedHours} to={preview.after.usedHours} />
+              <Change label="Projected" from={preview.before.projectedHours} to={preview.after.projectedHours} />
+              <Change label="Remaining after projected" from={preview.before.projectedLeft} to={preview.after.projectedLeft} bad={preview.after.projectedLeft < 0} />
+              {projectionNote(preview.after)}
+              <p className="mt-1 text-muted">{scheduling ? "Scheduled care is not billed." : "Completed hours are Unbilled. No external claim is submitted."}</p>
+            </div>
+          )}
+          {!scheduling && <label className={labelClass}>Service note (optional)<input aria-label="Service note" className={fieldClass} value={note} maxLength={1000} onChange={e=>setNote(e.target.value)}/></label>}
           {duplicate && <label className="flex gap-2 text-sm"><input type="checkbox" checked={confirmDuplicate} onChange={e=>setConfirmDuplicate(e.target.checked)}/>This is a separate service, not a duplicate entry.</label>}
           {error && <p role="alert" className="text-sm font-semibold text-bad">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setOpen(false)} className={secondaryButton}>Cancel</button>
-            <button type="submit" disabled={pending} className={primaryButton}>{pending ? "Saving…" : "Save hours"}</button>
+            <button type="submit" disabled={pending} className={primaryButton}>{pending ? "Saving…" : scheduling ? "Schedule care" : "Save hours"}</button>
           </div>
         </form>
       </Modal>
@@ -154,7 +206,7 @@ export function EditApprovalButton(props: Shared) {
 
   const month = props.month ?? monthOf(today());
   const mine = props.approvals.filter((a) => a.clientId === clientId);
-  const current = monthSummary(mine, props.visits, clientId, month);
+  const current = monthSummary(mine, props.visits, clientId, month, props.schedule);
   const value = Number(hours);
   const preview =
     hours !== "" && Number.isFinite(value) && value >= 0
@@ -163,6 +215,7 @@ export function EditApprovalButton(props: Shared) {
           props.visits,
           clientId,
           month,
+          props.schedule,
         )
       : null;
 
@@ -191,7 +244,7 @@ export function EditApprovalButton(props: Shared) {
           }}
         >
           <ClientSelect disabled={Boolean(props.defaultClientId)} clients={props.clients} value={clientId} onChange={(v) => { setClientId(v); setError(""); }} />
-          <p className="text-sm text-muted">Selected month now: {formatHours(current.approvedHours)} h approved, {formatHours(current.leftHours)} h left.</p>
+          <p className="text-sm text-muted">Selected month now: {formatHours(current.approvedHours)} h approved, {formatHours(current.usedHours)} h used, {formatHours(current.projectedHours)} h projected.</p>
           <div>
             <label htmlFor="monthly" className={labelClass}>New approved hours per month</label>
             <input id="monthly" type="number" step="0.01" min="0" max="744" inputMode="decimal" value={hours} onChange={(e) => { setHours(e.target.value); setError(""); }} className={fieldClass} />
@@ -206,8 +259,10 @@ export function EditApprovalButton(props: Shared) {
           </div>
           {preview && (
             <div aria-live="polite" className="rounded-xl bg-brand-soft p-3 text-sm text-brand-dark">
-              Selected month becomes {formatHours(preview.approvedHours)} h approved, {formatHours(preview.leftHours)} h left
-              {preview.bankedHours > 0 && <>, including {formatHours(preview.bankedHours)} h banked from backdating</>}.
+              Selected month becomes {formatHours(preview.approvedHours)} h approved
+              {preview.bankedHours > 0 && <> (including {formatHours(preview.bankedHours)} h banked from backdating)</>}. With{" "}
+              {formatHours(preview.usedHours)} h used and {formatHours(preview.projectedHours)} h projected,{" "}
+              {preview.projectedLeft < 0 ? <strong className="text-bad">that&apos;s {formatHours(-preview.projectedLeft)} h over.</strong> : `${formatHours(preview.projectedLeft)} h would be left.`}
             </div>
           )}
           {error && <p role="alert" className="text-sm font-semibold text-bad">{error}</p>}
