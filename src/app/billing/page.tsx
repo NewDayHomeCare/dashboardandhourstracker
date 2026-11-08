@@ -1,3 +1,4 @@
+import { requireStaffPage } from "@/lib/auth/staffSession";
 import { BillingHistory } from "@/components/BillingHistory";
 // Billing: claims for one two-week period, ready to enter in the portal.
 
@@ -22,18 +23,19 @@ import { UndoSubmitted } from "@/components/UndoSubmitted";
 export const dynamic = "force-dynamic";
 
 export default async function Billing({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+  await requireStaffPage();
   const { period } = await searchParams;
   const start = periodStartFor(period && validDate(period) ? period : today());
   const end = periodEnd(start);
-  const visits = getVisits();
+  const [visits,clients,batches] = await Promise.all([getVisits(),getClients(),getBatches()]);
 
-  const byClient = getClients()
+  const byClient = clients
     .map((client) => ({ client, claims: buildClaims(visits, client.id, start) }))
     .filter((x) => x.claims.length > 0);
 
   // Days already marked submitted, so a mistaken "Mark submitted" can be undone. Paid claims stay locked.
-  const paid = new Set(getBatches().filter((b) => b.status === "paid").map((b) => b.id));
-  const submittedByClient = getClients()
+  const paid = new Set(batches.filter((b) => b.status === "paid").map((b) => b.id));
+  const submittedByClient = clients
     .map((client) => ({
       client,
       days: visits
@@ -73,7 +75,7 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
       </section>
 
       <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">Draft amounts use an unverified demo rate and billing cycle. Confirm rates, effective dates, claim limits and deadlines before real billing. Copy does not submit a claim.</p>
-      <BillingHistory batches={getBatches()} />
+      <BillingHistory batches={batches} />
       {byClient.length === 0 && (
         <p className="rounded-2xl border border-line bg-white p-8 text-center text-muted">Nothing left to bill in this period.</p>
       )}

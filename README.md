@@ -4,7 +4,7 @@ See [HANDOFF.md](HANDOFF.md) for architecture, test coverage, limitations, backu
 
 ## Quick start
 
-Requires Node 24+. Run `npm ci`, then `npm run dev`. Open http://127.0.0.1:3000 on the same computer.
+Requires Node 24+. Run `npm ci`, configure Google staff sign-in using [AUTH_BACKEND.md](AUTH_BACKEND.md), then run `npm run dev`. Open http://localhost:3000 on the same computer. Without Google credentials and an approved email allowlist, client pages remain locked.
 
 - `npm test`: calculation, persistence, billing lifecycle and helper format tests.
 - `npm run lint`: dashboard code checks.
@@ -13,7 +13,7 @@ Requires Node 24+. Run `npm ci`, then `npm run dev`. Open http://127.0.0.1:3000 
 
 Records persist in `data/homecare.sqlite`. Git ignores the database: pushing code to GitHub does not share client records. An old database is backed up automatically before migrating to separate service entries.
 
-Add creates one completed service (default Unbilled). Edit changes one service. Recorded external submission changes billing state, not remaining hours. Returned claims become unbilled again; verified full payment is recorded separately. No automatic external submission/payment synchronization or login is provided.
+Add creates one completed service (default Unbilled). Edit changes one service. Recorded external submission changes billing state, not remaining hours. Returned claims become unbilled again; verified full payment is recorded separately. No automatic external submission/payment synchronization is provided. Google staff sign-in protects client pages and data operations; see [AUTH_BACKEND.md](AUTH_BACKEND.md) for setup and the UI handoff.
 
 Demo date, rates, proration and billing settings need verification before real use.
 
