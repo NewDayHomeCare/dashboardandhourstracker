@@ -148,7 +148,7 @@
     const kept =
       get(map.line.date).value.includes(line.date) &&
       num(get(map.line.hours).value) === line.hours &&
-      num(get(map.line.cost).value) === Number(line.cost) &&
+      Math.abs(num(get(map.line.cost).value) - Number(line.cost)) < 0.011 && // allow the portal to work out cost itself
       (!map.line.serviceType || norm(get(map.line.serviceType).selectedOptions?.[0]?.textContent || get(map.line.serviceType).value) === norm(service));
     return kept;
   }
@@ -233,9 +233,13 @@
             safeClick(add, map);
             // Count the line only once the form clears. If the portal shows an error instead,
             // stop here so nothing is overwritten.
+            // "Cleared" = the date box emptied, or hours went back to empty / 0
+            // (the real portal's hours box starts at 0).
             const cleared = await waitFor(() => {
+              const d = findFields(map.line.date)[0];
               const h = findFields(map.line.hours)[0];
-              return !!h && h.value === "";
+              const hoursReset = !!h && (h.value.trim() === "" || Number(h.value) === 0);
+              return (!!d && d.value.trim() === "") || hoursReset;
             }, map.addTimeoutMs || 2000);
             if (!cleared) throw new Error(`"${map.addLineButton}" didn't go through. Check the portal for a message, fix it, then click Fill again.`);
             await sleep(map.fieldDelayMs);
