@@ -12,11 +12,12 @@ import type {
   DeadlineStatus,
   ISODate,
   MonthSummary,
+  ScheduledDay,
   Visit,
   YearMonth,
 } from "./types";
 import { settings } from "./settings";
-import { addDays, daysBetween, daysInMonth, firstOfMonth, monthOf, today } from "./dates";
+import { addDays, daysBetween, daysInMonth, firstOfMonth, lastOfMonth, monthOf, today } from "./dates";
 
 export const toHundredths = (hours: number) => Math.round(hours * 100);
 export const fromHundredths = (h: number) => h / 100;
@@ -106,32 +107,92 @@ export function hoursUsed(visits: Visit[], clientId: string, month: YearMonth): 
   return fromHundredths(total);
 }
 
-export function statusFor(approvedHours: number, leftHours: number): ClientStatus {
-  if (leftHours < 0) return "over";
-  if (approvedHours > 0 && leftHours < approvedHours * settings.lowShare) return "low";
-  return "ok";
+/**
+ * Hours expected for the rest of the month after `onDate`:
+ * - scheduled care on days after today, as entered (days without a schedule in between mean no care);
+ * - plus, in the current month, an estimate for the days after the last scheduled day, from the
+ *   client's average hours per day over the last projectionLookbackDays.
+ */
+export function projectedHours(
+  visits: Visit[],
+  schedule: ScheduledDay[],
+  clientId: string,
+  month: YearMonth,
+  onDate: ISODate = today(),
+): { scheduledHours: number; projectedHours: number; projectionSource: MonthSummary["projectionSource"] } {
+  const end = lastOfMonth(month);
+  const start = addDays(onDate, 1) > firstOfMonth(month) ? addDays(onDate, 1) : firstOfMonth(month);
+  if (start > end) return { scheduledHours: 0, projectedHours: 0, projectionSource: "none" };
+
+  const planned = schedule.filter((d) => d.clientId === clientId && d.date >= start && d.date <= end);
+  const scheduled = planned.reduce((sum, d) => sum + toHundredths(d.hours), 0);
+  const lastPlanned = planned.map((d) => d.date).sort().at(-1);
+
+  let pace = 0;
+  if (monthOf(onDate) === month) {
+    const lookback = settings.projectionLookbackDays;
+    const from = addDays(onDate, -(lookback - 1));
+    const recent = visits
+      .filter((v) => v.clientId === clientId && v.date >= from && v.date <= onDate)
+      .reduce((sum, v) => sum + toHundredths(v.hours), 0);
+    const unplannedDays = daysBetween(lastPlanned ? addDays(lastPlanned, 1) : start, end) + 1;
+    pace = Math.max(0, Math.round((recent / lookback) * unplannedDays));
+  }
+
+  return {
+    scheduledHours: fromHundredths(scheduled),
+    projectedHours: fromHundredths(scheduled + pace),
+    projectionSource: scheduled && pace ? "schedule+pace" : scheduled ? "schedule" : pace ? "pace" : "none",
+  };
 }
 
-/** Unused hours do not carry over: each month starts fresh. */
+export type Repeat = "none" | "14-days" | "end-of-month";
+
+/** The days a Repeat choice in Add hours covers, starting from `date`. */
+export function repeatDates(date: ISODate, repeat: Repeat): ISODate[] {
+  const count =
+    repeat === "14-days" ? 14 : repeat === "end-of-month" ? daysInMonth(monthOf(date)) - Number(date.slice(8, 10)) + 1 : 1;
+  return Array.from({ length: count }, (_, i) => addDays(date, i));
+}
+
+/** The goal is to use every approved hour without going over. */
+export function statusFor(approvedHours: number, usedHours: number, projectedTotal: number): ClientStatus {
+  if (usedHours > approvedHours) return "over";
+  if (projectedTotal > approvedHours) return "will-go-over";
+  if (projectedTotal >= approvedHours * settings.unusedShare) return "on-track";
+  return "unused";
+}
+
+/**
+ * Approved, used and projected hours for one client in one month.
+ * Unused hours do not carry over: each month starts fresh.
+ */
 export function monthSummary(
   approvals: Approval[],
   visits: Visit[],
   clientId: string,
   month: YearMonth,
+  schedule: ScheduledDay[] = [],
+  onDate: ISODate = today(),
 ): MonthSummary {
   const { approvedHours, bankedHours } = monthlyAllowance(approvals, clientId, month);
   const usedHours = hoursUsed(visits, clientId, month);
-  const leftHours = fromHundredths(toHundredths(approvedHours) - toHundredths(usedHours));
+  const projection = projectedHours(visits, schedule, clientId, month, onDate);
+  const minus = (a: number, b: number) => fromHundredths(toHundredths(a) - toHundredths(b));
+  const projectedTotal = fromHundredths(toHundredths(usedHours) + toHundredths(projection.projectedHours));
   return {
     clientId,
     month,
     approvedHours,
     usedHours,
-    leftHours,
+    leftHours: minus(approvedHours, usedHours),
     billedHours: hoursUsed(visits.filter(v => v.submitted), clientId, month),
     unbilledHours: hoursUsed(visits.filter(v => !v.submitted), clientId, month),
     bankedHours,
-    status: statusFor(approvedHours, leftHours),
+    ...projection,
+    projectedTotal,
+    projectedLeft: minus(approvedHours, projectedTotal),
+    status: statusFor(approvedHours, usedHours, projectedTotal),
   };
 }
 

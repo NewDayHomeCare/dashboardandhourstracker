@@ -1,10 +1,18 @@
 import type { ClientStatus, DeadlineStatus } from "@/lib/types";
 import { Icon } from "./Icon";
 
-const CLIENT: Record<ClientStatus, { label: string; cls: string }> = {
-  ok: { label: "On track", cls: "bg-good-soft text-good" },
-  low: { label: "Running low", cls: "bg-warn-soft text-warn" },
-  over: { label: "Over approved", cls: "bg-bad-soft text-bad" },
+export const STATUS_LABEL: Record<ClientStatus, string> = {
+  over: "Over approved",
+  "will-go-over": "Risk of overuse",
+  "on-track": "On track",
+  unused: "Hours left unused",
+};
+
+const CLIENT_CLS: Record<ClientStatus, string> = {
+  over: "bg-bad text-white",
+  "will-go-over": "bg-bad-soft text-bad ring-1 ring-inset ring-red-200",
+  "on-track": "bg-good-soft text-good",
+  unused: "bg-warn-soft text-warn",
 };
 
 const DEADLINE: Record<DeadlineStatus, { label: string; cls: string }> = {
@@ -15,8 +23,11 @@ const DEADLINE: Record<DeadlineStatus, { label: string; cls: string }> = {
 };
 
 export function StatusBadge({ status }: { status: ClientStatus }) {
-  const s = CLIENT[status];
-  return <span className={`inline-block whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-bold ${s.cls}`}>{s.label}</span>;
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-bold ${CLIENT_CLS[status]}`}>
+      {STATUS_LABEL[status]}
+    </span>
+  );
 }
 
 export function DeadlineBadge({ status, daysLeft }: { status: DeadlineStatus; daysLeft: number }) {

@@ -47,18 +47,42 @@ export interface Visit {
   version?: number;
 }
 
-export type ClientStatus = "ok" | "low" | "over";
+/** Care planned for a day that hasn't happened yet. Counts toward projected hours, never billed. */
+export interface ScheduledDay {
+  clientId: string;
+  date: ISODate;
+  hours: number;
+}
+
+/**
+ * over          already used more than approved
+ * will-go-over  used + projected is more than approved
+ * on-track      expected to use most of the approved hours, without going over
+ * unused        expected to leave a good share of approved hours unused
+ */
+export type ClientStatus = "over" | "will-go-over" | "on-track" | "unused";
 
 export interface MonthSummary {
   clientId: string;
   month: YearMonth;
   approvedHours: number;
+  /** Hours of completed care recorded in the month. */
   usedHours: number;
+  /** approvedHours - usedHours */
   leftHours: number;
   billedHours: number;
   unbilledHours: number;
   /** Part of approvedHours that came from a backdated increase. */
   bankedHours: number;
+  /** Hours scheduled after today in the month. */
+  scheduledHours: number;
+  /** Hours expected for the rest of the month: scheduled, plus an estimate for unscheduled days. */
+  projectedHours: number;
+  projectionSource: "schedule" | "pace" | "schedule+pace" | "none";
+  /** usedHours + projectedHours */
+  projectedTotal: number;
+  /** approvedHours - projectedTotal (negative = expected to go over) */
+  projectedLeft: number;
   status: ClientStatus;
 }
 

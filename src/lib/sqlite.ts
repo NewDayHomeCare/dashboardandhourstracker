@@ -3,14 +3,15 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Approval, Client, Visit, BillingBatch, AuditEvent } from "./types";
+import type { Approval, Client, Visit, BillingBatch, AuditEvent, ScheduledDay } from "./types";
 import { makeSampleData } from "./sampleData";
-import { today, validDate, daysBetween } from "./dates";
+import { addDays, today, validDate, daysBetween } from "./dates";
 import { costCents } from "./engine";
 import { settings } from "./settings";
 
-type Seed = ReturnType<typeof makeSampleData>;
+type Seed = Omit<ReturnType<typeof makeSampleData>, "schedule"> & { schedule?: ScheduledDay[] };
 export type ChangeResult = { ok: true; id?: string } | { ok: false; error: string; code?: string };
+export type ScheduleInput = { clientId: string; dates: string[]; hours: number };
 export type ServiceInput = { clientId: string; date: string; hours: number; requestId: string; note?: string; confirmDuplicate?: boolean };
 export type SubmissionInput = { visits: { id: string; hours: number; version?: number }[]; reference: string; submittedOn: string; requestId: string; confirmed: boolean };
 const fail = (error: string, code?: string): ChangeResult => ({ ok: false, error, code });
@@ -51,6 +52,9 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
       CREATE TABLE IF NOT EXISTS billing_batches (id TEXT PRIMARY KEY, clientId TEXT NOT NULL REFERENCES clients(id), reference TEXT NOT NULL,
         submittedOn TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('submitted','paid','returned')), rateCents INTEGER NOT NULL,
         snapshot TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, note TEXT NOT NULL DEFAULT '');
+      CREATE TABLE IF NOT EXISTS scheduled_care (clientId TEXT NOT NULL REFERENCES clients(id), date TEXT NOT NULL,
+        hoursHundredths INTEGER NOT NULL CHECK(hoursHundredths > 0 AND hoursHundredths <= 2400),
+        createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, PRIMARY KEY (clientId, date));
       CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, clientId TEXT NOT NULL, action TEXT NOT NULL, targetId TEXT NOT NULL,
         at TEXT NOT NULL, actor TEXT NOT NULL, beforeJson TEXT, afterJson TEXT);
     `);
@@ -68,6 +72,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
       for (const c of initial.clients) db.prepare("INSERT INTO clients VALUES (?,?,?,?)").run(c.id,c.firstName,c.lastName,c.portalId);
       for (const a of initial.approvals) db.prepare("INSERT INTO approvals VALUES (?,?,?,?,?,?)").run(a.id,a.clientId,hundredths(a.monthlyHours),a.effectiveFrom,a.recordedOn,a.note??null);
       for (const v of initial.visits) db.prepare("INSERT INTO service_entries(id,clientId,date,hoursHundredths,submitted,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)").run(v.id,v.clientId,v.date,hundredths(v.hours),Number(v.submitted),now,now);
+      for (const d of initial.schedule ?? []) db.prepare("INSERT INTO scheduled_care VALUES (?,?,?,?,?)").run(d.clientId,d.date,hundredths(d.hours),now,now);
       db.prepare("INSERT INTO metadata VALUES ('initialized','1')").run();
     }
   });
@@ -80,6 +85,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
   const getVisits = (): Visit[] => db.prepare("SELECT id,clientId,date,hoursHundredths/100.0 AS hours,submitted,note,batchId,createdAt,updatedAt,version FROM service_entries ORDER BY date,createdAt,rowid").all().map(r=>({...r,submitted:Boolean(r.submitted)})) as unknown as Visit[];
   const getAudit = (clientId?: string): AuditEvent[] => (clientId?db.prepare("SELECT * FROM audit_events WHERE clientId=? ORDER BY rowid DESC").all(clientId):db.prepare("SELECT * FROM audit_events ORDER BY rowid DESC LIMIT 200").all()).map(plain) as unknown as AuditEvent[];
   const getBatches = (): BillingBatch[] => db.prepare("SELECT * FROM billing_batches ORDER BY rowid DESC").all().map(r=>({...r,visits:JSON.parse(String(r.snapshot)),voidedVisitIds:JSON.parse(String(r.voidedIds))})) as unknown as BillingBatch[];
+  const getSchedule = (): ScheduledDay[] => db.prepare("SELECT clientId,date,hoursHundredths/100.0 AS hours FROM scheduled_care ORDER BY date,clientId").all().map(plain) as unknown as ScheduledDay[];
   const rawVisit = (id: string) => db.prepare("SELECT * FROM service_entries WHERE id=?").get(id);
   const dayTotal = (clientId: string,date: string,except?:string) => Number(db.prepare("SELECT COALESCE(SUM(hoursHundredths),0) AS total FROM service_entries WHERE clientId=? AND date=? AND id != ?").get(clientId,date,except??"")?.total??0);
   const replay = (id:string,operation:string,payload:string): ChangeResult|undefined => {
@@ -208,6 +214,27 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
       return count;
     });
   }
+  // Planned care for days after today. Counts toward projected hours only; never billed.
+  function scheduleCare(input: ScheduleInput): { ok: true; count: number } | { ok: false; error: string } {
+    if(!getClient(input.clientId))return {ok:false,error:"Choose a client."};
+    if(!validHours(input.hours))return {ok:false,error:"Enter hours greater than 0 and at most 24, up to two decimals."};
+    const latest=addDays(today(),settings.maxScheduleDaysAhead);
+    if(!Array.isArray(input.dates)||!input.dates.length||input.dates.length>settings.maxScheduleDaysAhead)return {ok:false,error:"Choose the days to schedule."};
+    if(input.dates.some(d=>!validDate(d)||d<=today()||d>latest))return {ok:false,error:`Schedule days after today, up to ${settings.maxScheduleDaysAhead} days ahead (until ${latest}).`};
+    return tx(()=>{const now=new Date().toISOString();
+      for(const date of new Set(input.dates)){
+        const before=db.prepare("SELECT * FROM scheduled_care WHERE clientId=? AND date=?").get(input.clientId,date);
+        db.prepare("INSERT INTO scheduled_care VALUES (?,?,?,?,?) ON CONFLICT(clientId,date) DO UPDATE SET hoursHundredths=excluded.hoursHundredths,updatedAt=excluded.updatedAt").run(input.clientId,date,hundredths(input.hours),now,now);
+        audit(input.clientId,"care_scheduled",`${input.clientId}|${date}`,before?plain(before):null,{date,hours:input.hours});
+      }
+      return {ok:true,count:new Set(input.dates).size};});
+  }
+  function unscheduleCare(clientId:string,date:string):ChangeResult {
+    return tx(()=>{const before=db.prepare("SELECT * FROM scheduled_care WHERE clientId=? AND date=?").get(clientId,date);
+      if(!before)return fail("That day is no longer scheduled. Refresh the page.");
+      db.prepare("DELETE FROM scheduled_care WHERE clientId=? AND date=?").run(clientId,date);
+      audit(clientId,"schedule_removed",`${clientId}|${date}`,plain(before),null);return {ok:true};});
+  }
   function importVisits(rows:{clientId:string;date:string;hours:number}[]) {
     const errors:string[]=[];let imported=0;
     rows.forEach((r,n)=>{const result=setVisitHours(r.clientId,r.date,r.hours);if(result.ok)imported++;else errors.push(`Row ${n+1}: ${result.error}`);});return {imported,errors};
@@ -217,5 +244,5 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     const daily=new Map<string,number>();for(const v of batch.status === "returned" ? [] : batch.visits.filter(v=>!(batch.voidedVisitIds??[]).includes(v.id)))daily.set(v.date,(daily.get(v.date)??0)+hundredths(v.hours));
     return [...daily.values()].reduce((s,h)=>s+costCents(h/100,batch.rateCents),0);
   };
-  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,unmarkSubmitted,importVisits,close:()=>db.close()};
+  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,unmarkSubmitted,importVisits,getSchedule,scheduleCare,unscheduleCare,close:()=>db.close()};
 }

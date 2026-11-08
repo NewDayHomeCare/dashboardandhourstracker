@@ -6,10 +6,12 @@ import { ServiceActions } from "@/components/ServiceActions";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getApprovals, getClient, getClients, getVisits, getAudit, getBatches } from "@/lib/data";
+import { getApprovals, getClient, getClients, getVisits, getAudit, getBatches, getSchedule } from "@/lib/data";
 import { formatHours, monthSummary } from "@/lib/engine";
 import { addDays, daysInMonth, firstOfMonth, formatDate, formatMonth, selectedMonth, today } from "@/lib/dates";
 import { StatusBadge } from "@/components/StatusBadge";
+import { HoursBar } from "@/components/HoursBar";
+import { RemoveScheduledDay } from "@/components/RemoveScheduledDay";
 import { Avatar } from "@/components/Icon";
 import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
 
@@ -26,8 +28,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const allVisits = await getVisits();
   const approvals = allApprovals.filter((a) => a.clientId === id);
   const visits = allVisits.filter((v) => v.clientId === id);
-  const s = monthSummary(approvals, visits, id, month);
-  const [clients,batches,audit] = await Promise.all([getClients(),getBatches(),getAudit(id)]);
+  const [clients,batches,audit,allSchedule] = await Promise.all([getClients(),getBatches(),getAudit(id),getSchedule()]);
+  const schedule = allSchedule.filter((d) => d.clientId === id);
+  const s = monthSummary(approvals, visits, id, month, schedule);
+  const upcoming = schedule.filter((d) => d.date.startsWith(month) && d.date > today());
   const pick = clients.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName }));
 
   const first = firstOfMonth(month);
@@ -35,7 +39,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const days = Array.from({ length: daysInMonth(month) }, (_, i) => {
     const date = addDays(first, i);
     const onDay = visits.filter(v => v.date === date);
-    return { date, day: i + 1, hours: onDay.length ? onDay.reduce((sum,v)=>sum+Math.round(v.hours*100),0)/100 : undefined, submitted: onDay.length > 0 && onDay.every(v=>v.submitted), future: date > today() };
+    const future = date > today();
+    const planned = future ? schedule.find(d => d.date === date)?.hours : undefined;
+    return { date, day: i + 1, hours: onDay.length ? onDay.reduce((sum,v)=>sum+Math.round(v.hours*100),0)/100 : planned, submitted: onDay.length > 0 && onDay.every(v=>v.submitted), scheduled: !onDay.length && planned !== undefined, future };
   });
   const name = `${client.firstName} ${client.lastName}`;
 
@@ -56,18 +62,24 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </div>
         <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
           <MonthPicker month={month} />
-          <EditApprovalButton key={`approval-${month}`} month={month} clients={pick} approvals={allApprovals} visits={allVisits} defaultClientId={id} />
-          <AddHoursButton key={`hours-${month}`} month={month} clients={pick} approvals={allApprovals} visits={allVisits} defaultClientId={id} />
+          <EditApprovalButton key={`approval-${month}`} month={month} clients={pick} approvals={allApprovals} visits={allVisits} schedule={allSchedule} defaultClientId={id} />
+          <AddHoursButton key={`hours-${month}`} month={month} clients={pick} approvals={allApprovals} visits={allVisits} schedule={allSchedule} defaultClientId={id} />
         </div>
       </section>
 
       <section aria-label="Selected month" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Stat label="Approved" value={s.approvedHours} />
-        <Stat label="Used" value={s.usedHours} />
-        <Stat label="Remaining" value={s.leftHours} bad={s.leftHours < 0} />
-        <Stat label="Billed" value={s.billedHours} />
-        <Stat label="Unbilled" value={s.unbilledHours} />
+        <Stat label="Approved" value={s.approvedHours} sub={s.bankedHours > 0 ? `includes ${formatHours(s.bankedHours)} h banked` : undefined} />
+        <Stat label="Used" value={s.usedHours} sub={`${formatHours(s.billedHours)} billed · ${formatHours(s.unbilledHours)} unbilled`} />
+        <Stat label="Projected to month end" value={s.projectedHours} sub={{ schedule: "from scheduled care", pace: "estimate from the last 4 weeks", "schedule+pace": "scheduled care + estimate after it", none: undefined }[s.projectionSource]} />
+        <Stat label={s.projectedLeft < 0 ? "Over after projected" : "Remaining after projected"} value={Math.abs(s.projectedLeft)} bad={s.projectedLeft < 0} />
+        <Stat label="Remaining now" value={s.leftHours} bad={s.leftHours < 0} sub="approved − used" />
       </section>
+      <div className="mb-6 rounded-2xl border border-line bg-white p-5">
+        <HoursBar s={s} width="w-full" />
+        <p className="mt-2 text-sm text-muted">
+          {formatHours(s.usedHours)} h used + {formatHours(s.projectedHours)} h projected = {formatHours(s.projectedTotal)} h of {formatHours(s.approvedHours)} h approved
+        </p>
+      </div>
 
       <section aria-label="Service records" className="mb-6 overflow-x-auto rounded-2xl border border-line bg-white p-5">
         <h2 className="text-base font-bold">Service records - {formatMonth(month)}</h2>
@@ -78,7 +90,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <tr key={v.id} className="border-b border-line"><td className="py-3">{v.date}</td><td>{formatHours(v.hours)} h</td>
               <td>{v.submitted ? "Billed" : "Unbilled"}<p className="max-w-xs text-xs text-muted break-words">{v.note}</p></td>
               <td><div className="flex flex-wrap items-center gap-2">
-                {!v.submitted && <AddHoursButton key={`${v.id}-${v.hours}`} clients={pick} approvals={allApprovals} visits={allVisits}
+                {!v.submitted && <AddHoursButton key={`${v.id}-${v.hours}`} clients={pick} approvals={allApprovals} visits={allVisits} schedule={allSchedule}
                   defaultClientId={id} month={month} defaultDate={v.date} defaultHours={v.hours} serviceId={v.id} expectedVersion={v.version} buttonLabel="Edit" primary={false} />}
                 <ServiceActions visit={v} />
               </div></td>
@@ -86,6 +98,22 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           ))}</tbody>
         </table>
         {!visits.some(v => v.date.startsWith(month)) && <p className="py-6 text-muted">No service records for this month.</p>}
+      </section>
+      <section aria-label="Scheduled care" className="mb-6 rounded-2xl border border-line bg-white p-5">
+        <h2 className="text-base font-bold">Scheduled care - {formatMonth(month)}</h2>
+        <p className="mt-2 mb-4 text-sm text-muted">Days after today. They count toward projected hours and are never billed; add the completed hours once each visit happens. Use Add hours with a later date or Repeat to schedule more.</p>
+        {upcoming.length ? (
+          <ul className="flex flex-wrap gap-2 text-sm">
+            {upcoming.map((d) => (
+              <li key={d.date} className="flex items-center gap-1 rounded-lg border border-dashed border-brand py-1 pl-3 pr-1">
+                <span>{formatDate(d.date)} · {formatHours(d.hours)} h</span>
+                <RemoveScheduledDay clientId={id} date={d.date} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">Nothing scheduled after today this month{s.projectionSource === "pace" ? ", so the projection is an estimate from the last 4 weeks" : ""}.</p>
+        )}
       </section>
       <BillingHistory batches={batches.filter(b=>b.clientId===id)} />
       <section className="mb-6 rounded-2xl border border-line bg-white p-5"><h2 className="font-bold">Change history</h2><p className="my-2 text-xs text-muted">New changes identify the authenticated staff account. Older records may show an unauthenticated local operator.</p><ul className="max-h-72 overflow-y-auto space-y-2">{audit.slice(0,100).map(event=><li className="border-b py-2 text-sm" key={event.id}><p>{event.at} · {event.action.replaceAll("_"," ")}</p><details className="text-xs text-muted"><summary>Before / after</summary><pre className="overflow-x-auto whitespace-pre-wrap">{event.beforeJson ?? "—"}{"\n→\n"}{event.afterJson ?? "—"}</pre></details></li>)}</ul></section>
@@ -101,19 +129,25 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <div
                 key={d.date}
                 className={`flex min-h-16 flex-col rounded-lg border p-1.5 text-xs ${
-                  d.hours ? (d.submitted ? "border-slate-300 bg-slate-50" : "border-brand bg-brand-soft") : "border-line"
-                } ${d.future ? "opacity-50" : ""}`}
+                  d.hours === undefined
+                    ? "border-line"
+                    : d.scheduled
+                    ? "border-dashed border-brand bg-white"
+                    : d.submitted
+                    ? "border-slate-300 bg-slate-50"
+                    : "border-brand bg-brand-soft"
+                }`}
               >
                 <span className="text-muted">{d.day}</span>
                 {d.hours !== undefined && (
                   <span className={`mt-auto text-sm font-semibold ${d.submitted ? "text-slate-600" : "text-brand-dark"}`}>
-                    {formatHours(d.hours)} h
+                    {formatHours(d.hours)} h{d.scheduled && <span className="block text-[11px] font-normal text-muted">scheduled</span>}
                   </span>
                 )}
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted">Blue = not billed yet. Grey = submitted in the portal.</p>
+          <p className="mt-3 text-xs text-muted">Green = used, not billed yet. Grey = submitted in the portal. Dashed = scheduled.</p>
         </section>
 
         <section aria-labelledby="hist-title" className="flex flex-[1_1_300px] flex-col gap-3 rounded-2xl border border-line bg-white p-5">
@@ -132,11 +166,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   );
 }
 
-function Stat({ label, value, bad }: { label: string; value: number; bad?: boolean }) {
+function Stat({ label, value, bad, sub }: { label: string; value: number; bad?: boolean; sub?: string }) {
   return (
     <div className="rounded-2xl border border-line bg-white p-5">
       <p className="text-sm font-semibold text-muted">{label}</p>
       <p className={`mt-2 text-2xl font-bold tabular-nums ${bad ? "text-bad" : "text-slate-900"}`}>{formatHours(value)} h</p>
+      {sub && <p className="mt-1 text-xs text-muted">{sub}</p>}
     </div>
   );
 }

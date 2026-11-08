@@ -1,16 +1,38 @@
 "use client";
 
-// Sidebar + top bar from the team's Figma Make design.
+// Sidebar + top bar, in the New Day green and yellow from the team's Figma Make design.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/", label: "Hours overview", icon: "dashboard" },
   { href: "/billing", label: "Billing", icon: "billing" },
 ];
+
+function Logo() {
+  // Put the logo file at public/new-day-logo.png. Until then, an icon stands in.
+  const [failed, setFailed] = useState(false);
+  const ref = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    // The image may fail before React is listening, so check once on mount too.
+    const img = ref.current;
+    if (img && img.complete && img.naturalWidth === 0) setFailed(true);
+  }, []);
+  if (failed) {
+    return (
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-on-accent">
+        <Icon name="activity" size={22} />
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img ref={ref} src="/new-day-logo.png" alt="" onError={() => setFailed(true)} className="h-10 w-10 shrink-0 rounded-xl bg-white object-cover" />
+  );
+}
 
 export function AppShell({ todayLabel, children }: { todayLabel: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -30,22 +52,20 @@ export function AppShell({ todayLabel, children }: { todayLabel: string; childre
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col border-r border-line bg-white transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col bg-sidebar transition-transform duration-200 lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-[78px] items-center gap-3 border-b border-line px-6">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-white">
-            <Icon name="activity" size={23} />
-          </div>
+        <div className="flex h-[78px] items-center gap-3 bg-sidebar-head px-6">
+          <Logo />
           <div>
-            <p className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">New Day</p>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Homecare</p>
+            <p className="text-[17px] font-bold tracking-[-0.02em] text-white">New Day</p>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-accent">HomeCare</p>
           </div>
         </div>
 
         <nav className="flex-1 px-3 py-6" aria-label="Main">
-          <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.14em] text-muted">Workspace</p>
+          <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.14em] text-white/80">Workspace</p>
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -54,8 +74,8 @@ export function AppShell({ todayLabel, children }: { todayLabel: string; childre
               aria-current={isActive(item.href) ? "page" : undefined}
               className={`mt-1 flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${
                 isActive(item.href)
-                  ? "bg-brand-soft font-semibold text-brand-dark"
-                  : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  ? "bg-accent font-bold text-on-accent shadow-[0_4px_4px_rgba(15,11,0,0.25)]"
+                  : "font-semibold text-white hover:bg-white/10"
               }`}
             >
               <Icon name={item.icon} size={19} /> {item.label}
@@ -63,9 +83,7 @@ export function AppShell({ todayLabel, children }: { todayLabel: string; childre
           ))}
         </nav>
 
-        <div className="border-t border-line p-4 text-xs text-muted">
-          Sample data only · no real clients
-        </div>
+        <div className="border-t border-white/15 p-4 text-xs text-white/85">Sample data only · no real clients</div>
       </aside>
 
       <div className="min-h-screen lg:pl-[252px]">

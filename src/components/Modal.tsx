@@ -70,6 +70,6 @@ export const fieldClass =
   "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-brand focus:ring-3 focus:ring-brand-soft";
 export const labelClass = "mb-2 block text-sm font-bold text-slate-700";
 export const primaryButton =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-60";
+  "inline-flex h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand px-5 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-60";
 export const secondaryButton =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50";
+  "inline-flex h-11 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50";

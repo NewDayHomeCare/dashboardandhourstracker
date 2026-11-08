@@ -1,12 +1,13 @@
 "use client";
 
-// Client hour tracking table from the Figma Make design, fed by the engine.
+// Client hour tracking table from the Figma Make design: used + projected against approved.
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Client, ClientStatus, DeadlineStatus, MonthSummary } from "@/lib/types";
 import { formatHours } from "@/lib/engine";
-import { DeadlineBadge, StatusBadge } from "./StatusBadge";
+import { DeadlineBadge, STATUS_LABEL, StatusBadge } from "./StatusBadge";
+import { HoursBar } from "./HoursBar";
 import { Avatar, Icon } from "./Icon";
 
 export interface ClientRow {
@@ -16,15 +17,14 @@ export interface ClientRow {
   deadline: { status: DeadlineStatus; daysLeft: number } | null;
 }
 
-const FILTERS: { key: ClientStatus | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "over", label: "Over approved" },
-  { key: "low", label: "Running low" },
-  { key: "ok", label: "On track" },
-];
-
-const ORDER: Record<ClientStatus, number> = { over: 0, low: 1, ok: 2 };
-const BAR: Record<ClientStatus, string> = { over: "bg-bad", low: "bg-amber-500", ok: "bg-brand" };
+const FILTERS: (ClientStatus | "all")[] = ["all", "over", "will-go-over", "unused", "on-track"];
+const ORDER: Record<ClientStatus, number> = { over: 0, "will-go-over": 1, unused: 2, "on-track": 3 };
+const SOURCE: Record<MonthSummary["projectionSource"], string> = {
+  schedule: "scheduled",
+  pace: "estimate",
+  "schedule+pace": "scheduled + estimate",
+  none: "—",
+};
 
 export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string }) {
   const [filter, setFilter] = useState<ClientStatus | "all">("all");
@@ -35,33 +35,33 @@ export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string 
     return rows
       .filter((r) => filter === "all" || r.summary.status === filter)
       .filter((r) => `${r.client.firstName} ${r.client.lastName} ${r.client.portalId}`.toLowerCase().includes(q))
-      .sort((a, b) => ORDER[a.summary.status] - ORDER[b.summary.status] || a.summary.leftHours - b.summary.leftHours);
+      .sort((a, b) => ORDER[a.summary.status] - ORDER[b.summary.status] || a.summary.projectedLeft - b.summary.projectedLeft);
   }, [rows, filter, search]);
 
   return (
-    <section aria-labelledby="table-title" className="overflow-hidden rounded-2xl border border-line bg-white">
-      <div className="flex flex-col justify-between gap-4 border-b border-line p-5 lg:flex-row lg:items-center sm:px-6">
+    <section aria-labelledby="table-title" className="overflow-hidden rounded-2xl border border-line bg-white shadow-[0_3px_16px_rgba(15,23,42,0.04)]">
+      <div className="flex flex-col justify-between gap-4 border-b border-line p-5 xl:flex-row xl:items-center sm:px-6">
         <div>
           <h2 id="table-title" className="text-base font-bold text-slate-900">Client hour tracking</h2>
-          <p className="mt-1 text-sm text-muted">Most urgent first</p>
+          <p className="mt-1 text-sm text-muted">Used so far, plus what&apos;s projected to month end. Most urgent first.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <button
-                key={f.key}
+                key={f}
                 type="button"
-                onClick={() => setFilter(f.key)}
-                aria-pressed={filter === f.key}
+                onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
                 className={`h-10 rounded-xl border px-3 text-sm font-semibold ${
-                  filter === f.key ? "border-brand bg-brand text-white" : "border-line bg-white text-slate-700 hover:bg-slate-50"
+                  filter === f ? "border-brand bg-brand text-white" : "border-line bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
-                {f.label}
+                {f === "all" ? "All" : STATUS_LABEL[f]}
               </button>
             ))}
           </div>
-          <div className="relative sm:w-[260px]">
+          <div className="relative sm:w-[240px]">
             <label htmlFor="search" className="sr-only">Search clients</label>
             <Icon name="search" size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
             <input
@@ -76,24 +76,27 @@ export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string 
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] border-collapse text-left">
+        <table className="w-full min-w-[1100px] border-collapse text-left">
           <thead>
             <tr className="bg-slate-50 text-xs font-bold uppercase tracking-[0.08em] text-muted">
               <th className="px-6 py-4">Client</th>
-              <th className="px-5 py-4">Last service (selected month)</th><th className="px-5 py-4 text-right">Approved</th>
-              <th className="px-5 py-4">Hours used</th>
-              <th className="px-5 py-4 text-right">Remaining</th>
-              <th className="px-5 py-4 text-right">Billed</th><th className="px-5 py-4 text-right">Unbilled</th>
-              <th className="px-5 py-4">Status</th>
-              <th className="px-5 py-4">Billing deadline (all months)</th>
+              <th className="px-4 py-4">Last service</th>
+              <th className="px-4 py-4 text-right">Approved</th>
+              <th className="px-4 py-4 text-right">Hours used</th>
+              <th className="px-4 py-4 text-right">Projected</th>
+              <th className="px-4 py-4">
+                Remaining
+                <span className="mt-0.5 block text-[11px] font-semibold normal-case tracking-normal">Approved − (used + projected)</span>
+              </th>
+              <th className="px-4 py-4">Billing deadline (all months)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {shown.map(({ client, summary, deadline, lastServiceDate }) => {
+            {shown.map(({ client, summary: s, deadline, lastServiceDate }) => {
               const name = `${client.firstName} ${client.lastName}`;
-              const progress = summary.approvedHours > 0 ? Math.min((summary.usedHours / summary.approvedHours) * 100, 100) : 100;
+              const overBy = -s.projectedLeft;
               return (
-                <tr key={client.id} className="transition-colors hover:bg-blue-50/40">
+                <tr key={client.id} className="transition-colors hover:bg-brand-soft/40">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <Avatar name={name} seed={client.id} />
@@ -105,25 +108,24 @@ export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string 
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm whitespace-nowrap">{lastServiceDate ?? "No service"}</td>
-                  <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-slate-700">{formatHours(summary.approvedHours)} h</td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <span className="w-16 text-sm font-semibold tabular-nums text-slate-700">{formatHours(summary.usedHours)} h</span>
-                      <span aria-hidden="true" className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                        <span className={`block h-full rounded-full ${BAR[summary.status]}`} style={{ width: `${progress}%` }} />
-                      </span>
-                    </div>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-muted">{lastServiceDate ?? "No service"}</td>
+                  <td className="px-4 py-4 text-right text-sm font-semibold tabular-nums text-slate-700">{formatHours(s.approvedHours)} h</td>
+                  <td className="px-4 py-4 text-right">
+                    <span className="block text-sm font-semibold tabular-nums text-slate-700">{formatHours(s.usedHours)} h</span>
+                    <span className="block whitespace-nowrap text-xs text-muted">{formatHours(s.billedHours)} billed · {formatHours(s.unbilledHours)} unbilled</span>
                   </td>
-                  <td className={`px-5 py-4 text-right text-sm font-bold tabular-nums ${summary.leftHours < 0 ? "text-bad" : "text-slate-800"}`}>
-                    {formatHours(summary.leftHours)} h
+                  <td className="px-4 py-4 text-right">
+                    <span className="block text-sm font-semibold tabular-nums text-brand-dark">{formatHours(s.projectedHours)} h</span>
+                    <span className="block whitespace-nowrap text-xs text-muted">{SOURCE[s.projectionSource]}</span>
                   </td>
-                  <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700">
-                    {formatHours(summary.billedHours)} h
+                  <td className="w-[220px] px-4 py-4">
+                    <span className={`block text-sm font-bold tabular-nums ${overBy > 0 ? "text-bad" : "text-slate-800"}`}>
+                      {overBy > 0 ? `${formatHours(overBy)} h over` : `${formatHours(s.projectedLeft)} h left`}
+                    </span>
+                    <div className="mt-2"><HoursBar s={s} width="w-36" /></div>
+                    <div className="mt-2"><StatusBadge status={s.status} /></div>
                   </td>
-                  <td className="px-5 py-4 text-right text-sm tabular-nums">{formatHours(summary.unbilledHours)} h</td>
-                  <td className="px-5 py-4"><StatusBadge status={summary.status} /></td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-4">
                     {deadline ? <DeadlineBadge status={deadline.status} daysLeft={deadline.daysLeft} /> : <span className="text-sm text-muted">All billed</span>}
                   </td>
                 </tr>
@@ -139,8 +141,13 @@ export function ClientTable({ rows, month }: { rows: ClientRow[]; month: string 
           </div>
         )}
       </div>
-      <div className="border-t border-line px-6 py-4">
-        <p className="text-sm text-muted">Showing {shown.length} of {rows.length} clients</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-6 py-4 text-sm text-muted">
+        <p>Showing {shown.length} of {rows.length} clients</p>
+        <p className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-4 rounded-full bg-brand" /> Used</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-4 rounded-full bg-brand-light" /> Projected</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-4 rounded-full bg-bad" /> Over approved</span>
+        </p>
       </div>
     </section>
   );
