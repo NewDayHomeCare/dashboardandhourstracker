@@ -47,6 +47,7 @@
   .ok { background:#e3f0ee; color:#0a403b; }
   .bad { background:#fbe7e7; color:#8a1f1f; }
   [hidden] { display:none !important; }
+  @media print { .banner, .steps, .actions, #sampleBox { display:none !important; } body { background:#fff; } .card { border:none; } }
 </style>
 </head>
 <body>
@@ -132,8 +133,13 @@
   <!-- Step 5: done -->
   <section class="card" data-step="5" hidden>
     <h2>Claim processed (mock)</h2>
-    <p>Nothing was sent anywhere. In the real portal you would print the claim statement for the patient.</p>
-    <div class="actions"><button type="button" id="again" class="primary">Enter another claim</button></div>
+    <p class="msg ok" role="status">Claim number <strong id="claimNo"></strong></p>
+    <dl id="claimSummary" style="display:grid; grid-template-columns:auto 1fr; gap:4px 16px; margin:16px 0;"></dl>
+    <p class="hint">Fake claim number for testing. Nothing was sent anywhere.</p>
+    <div class="actions">
+      <button type="button" id="print">Print claim statement</button>
+      <button type="button" id="again" class="primary">Enter another claim</button>
+    </div>
   </section>
 </main>
 
@@ -152,7 +158,7 @@
   // reloads in sessionStorage (this tab only, cleared by Cancel or Enter another claim).
   const KEY = "mockPortalState";
   const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; } catch { return {}; } };
-  const save = (extra = {}) => { try { sessionStorage.setItem(KEY, JSON.stringify({ step, patient, services, ...extra })); } catch {} };
+  const save = (extra = {}) => { try { sessionStorage.setItem(KEY, JSON.stringify({ step, patient, services, processed, ...extra })); } catch {} };
   const forget = () => { try { sessionStorage.removeItem(KEY); } catch {} };
   const DEMO_TODAY = "2026-11-07";
   const OLDEST_ALLOWED = (() => { const d = new Date(DEMO_TODAY + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 60); return d.toISOString().slice(0, 10); })();
@@ -239,16 +245,50 @@
   };
   $("modify").onclick = () => go(3);
   $("cancel").onclick = () => { forget(); location.reload(); };
-  $("process").onclick = () => go(5);
+  // Fake claim number: MOCK-YYYYMMDD-#### (counter kept in this browser only).
+  function nextClaimNumber() {
+    let n = 1;
+    try { n = Number(localStorage.getItem("mockClaimCounter") || 0) + 1; localStorage.setItem("mockClaimCounter", String(n)); } catch {}
+    const d = new Date();
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    return `MOCK-${ymd}-${String(n).padStart(4, "0")}`;
+  }
+  let processed = null;
+  function showProcessed() {
+    if (!processed) return;
+    $("claimNo").textContent = processed.number;
+    const rows = [
+      ["Patient", patient ? `${patient.first} ${patient.last}` : "—"],
+      ["Services", String(services.length)],
+      ["Total claimed", `$${processed.total.toFixed(2)}`],
+      ["Paid by Blue Cross (mock)", `$${processed.total.toFixed(2)}`],
+      ["Patient pays", "$0.00"],
+      ["Processed", processed.at],
+    ];
+    $("claimSummary").innerHTML = rows.map(([k, v]) => `<dt style="color:var(--muted)">${k}</dt><dd style="margin:0; font-weight:600">${v}</dd>`).join("");
+  }
+  $("process").onclick = () => {
+    processed = {
+      number: nextClaimNumber(),
+      total: services.reduce((t, s) => t + Number(s.cost), 0),
+      at: new Date().toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" }),
+    };
+    go(5);
+    save({ processed });
+    showProcessed();
+  };
+  $("print").onclick = () => window.print();
   $("again").onclick = () => { forget(); location.reload(); };
 
   // Restore where we were before the reload.
   const st = load();
   services = st.services || [];
   patient = st.patient || null;
+  processed = st.processed || null;
   showServices();
   go(st.step || 1);
   if (patient) $("patientLine").textContent = `Patient: ${patient.first} ${patient.last}`;
+  showProcessed();
   if (st.keep) { $("sdate").value = st.keep.date; $("stype").value = st.keep.type; $("shours").value = st.keep.hours; $("scost").value = st.keep.cost; }
   if (st.flash) say("m3", st.flash.text, st.flash.ok);
   if (st.flash || st.keep) save(); // show the message once
