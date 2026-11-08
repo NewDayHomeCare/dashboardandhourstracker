@@ -267,13 +267,69 @@
 
   globalThis.ndFillPage = fillPage; // used by the automated test
 
+  // ---------- One line at a time, for portals that reload the page after "Add claim" ----------
+  // The side panel drives these: detect the screen, fill one line and press Add claim, then ask
+  // for the status (repeatedly, while the page reloads) until the form comes back empty.
+
+  const PAGE_ID = Math.random().toString(36).slice(2); // changes every time the page loads
+
+  function detect(map = globalThis.ND_FIELD_MAP) {
+    if (findFields(map.patient.portalId).length) return "patient";
+    if (map.line && findFields(map.line.hours).length) return "lines";
+    return "none";
+  }
+
+  async function fillOneLine(claim, index, map = globalThis.ND_FIELD_MAP) {
+    if (detect(map) !== "lines") return { ok: false, error: "This isn't the Enter claim screen." };
+    const line = claim.lines[index];
+    if (!line) return { ok: false, error: "No such line." };
+    try {
+      await fillLineChecked(line, index, map);
+      const add = findButton(map.addLineButton);
+      if (!add) return { ok: false, error: `Couldn't find the "${map.addLineButton}" button.` };
+      const text = norm(add.getAttribute("aria-label") || add.textContent || add.value);
+      if (map.neverClick.some((n) => text.startsWith(norm(n)))) return { ok: false, error: `Refused to press "${text}".` };
+      // Answer first, then press: the page may reload and cut the answer off.
+      setTimeout(() => add.click(), 150);
+      return { ok: true, pageId: PAGE_ID };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  /** Reads back only the date and hours boxes, to tell whether the line went in. */
+  function status(expect, map = globalThis.ND_FIELD_MAP) {
+    const stage = detect(map);
+    if (stage !== "lines") return { stage, pageId: PAGE_ID, cleared: false, stillFilled: false };
+    const d = findFields(map.line.date)[0];
+    const h = findFields(map.line.hours)[0];
+    const hoursValue = h ? h.value.trim() : "";
+    const cleared = (!!d && d.value.trim() === "") || hoursValue === "" || Number(hoursValue) === 0;
+    const stillFilled = !!d && d.value.includes(expect?.date) && Number(hoursValue) === Number(expect?.hours);
+    return { stage, pageId: PAGE_ID, cleared, stillFilled };
+  }
+
   if (globalThis.chrome?.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (sender.id !== chrome.runtime.id || msg?.type !== "nd-fill") return;
-      fillPage(msg.claim, msg.groupNumber, msg.startAt || 0)
-        .then(sendResponse)
-        .catch((e) => sendResponse({ stage: "error", added: 0, problems: [e.message], message: "" }));
-      return true; // answer asynchronously
+      if (sender.id !== chrome.runtime.id) return;
+      if (msg?.type === "nd-detect") {
+        sendResponse({ stage: detect(), pageId: PAGE_ID });
+        return;
+      }
+      if (msg?.type === "nd-status") {
+        sendResponse(status(msg.expect));
+        return;
+      }
+      if (msg?.type === "nd-fill-line") {
+        fillOneLine(msg.claim, msg.index).then(sendResponse);
+        return true;
+      }
+      if (msg?.type === "nd-fill") {
+        fillPage(msg.claim, msg.groupNumber, msg.startAt || 0)
+          .then(sendResponse)
+          .catch((e) => sendResponse({ stage: "error", added: 0, problems: [e.message], message: "" }));
+        return true; // answer asynchronously
+      }
     });
   }
 })();

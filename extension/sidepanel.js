@@ -1,23 +1,14 @@
 // Side panel logic.
 //
 // Where data lives:
-// - The loaded claims: chrome.storage.session (memory only, never on disk, gone when Chrome
-//   closes). A client's period can hold several claims (e.g. two weeks of daily care = 7 + 7);
-//   they're filled one after another. Cleared after the last "Mark submitted", "Clear claim"
-//   or 15 minutes on one claim, whichever is first.
+// - The current claim: chrome.storage.session (memory only, never on disk, gone when Chrome
+//   closes) and cleared after "Mark submitted", "Clear claim" or 15 minutes, whichever is first.
 // - Group number and the submitted log: chrome.storage.local. Neither contains client names.
 // - Nothing is ever sent over the network. The extension has no permission to do so.
 
 const CLEAR_AFTER_MS = 15 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
-let current = null; // { claims, index, added, loadedAt }
-
-const claimNow = () => current.claims[current.index];
-const claimName = (i) => {
-  const c = current.claims[i];
-  const n = current.claims.length;
-  return `${c.label || c.claimKey}${n > 1 ? ` (claim ${i + 1} of ${n})` : ""}`;
-};
+let current = null; // { claim, loadedAt }
 
 function say(text, ok = true) {
   const m = $("message");
@@ -30,14 +21,13 @@ function render() {
   $("claimSection").hidden = !current;
   $("loadSection").hidden = !!current;
   if (!current) return;
-  const claim = claimNow();
-  const left = current.claims.length - current.index - 1;
+  const { claim } = current;
   const hours = claim.lines.reduce((s, l) => s + Math.round(l.hours * 100), 0) / 100;
   const cost = claim.lines.reduce((s, l) => s + Math.round(Number(l.cost) * 100), 0) / 100;
   const rows = [
     ["Client", `${claim.client.lastName}, ${claim.client.firstName}`],
     ["ID", claim.client.portalId],
-    ["Claim", claimName(current.index)],
+    ["Claim", claim.label || claim.claimKey],
     ["Lines", String(claim.lines.length)],
     ["Hours", hours.toFixed(2)],
     ["Cost", `$${cost.toFixed(2)}`],
@@ -52,10 +42,6 @@ function render() {
     }),
   );
   $("progress").textContent = `Services added in the portal: ${current.added || 0} of ${claim.lines.length}`;
-  $("queue").hidden = left === 0;
-  $("queue").textContent = `After this: ${left} more claim${left === 1 ? "" : "s"} for this client. Mark submitted moves to the next one.`;
-  $("done").textContent = left > 0 ? "Mark submitted, next claim" : "Mark submitted";
-  $("clear").textContent = current.claims.length > 1 ? "Clear all claims" : "Clear claim";
   updateExpiry();
 }
 
@@ -71,7 +57,7 @@ function updateExpiry() {
 
 async function clearClaim(message) {
   current = null;
-  await chrome.storage.session.remove("claims");
+  await chrome.storage.session.remove("claim");
   render();
   if (message) say(message);
 }
@@ -89,33 +75,108 @@ async function renderLog() {
 
 $("load").addEventListener("click", async () => {
   try {
-    const claims = ndParseClaims($("paste").value);
-    current = { claims, index: 0, added: 0, loadedAt: Date.now() };
-    await chrome.storage.session.set({ claims: current });
+    const claim = ndParseClaim($("paste").value);
+    current = { claim, loadedAt: Date.now(), added: 0 };
+    await chrome.storage.session.set({ claim: current });
     $("paste").value = "";
     navigator.clipboard?.writeText("").catch(() => {}); // don't leave client details on the clipboard
-    say(`${claims.length > 1 ? `${claims.length} claims loaded. Starting with ${claimName(0)}.` : "Claim loaded."} Open Enter claim in the portal, then click Fill this screen.`);
+    say("Claim loaded. Open Enter claim in the portal, then click Fill this screen.");
     render();
   } catch (e) {
     say(e.message, false);
   }
 });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const NOT_PORTAL = "This page isn't the billing portal, or it needs a reload. Open the portal's Enter claim page and try again.";
+// For automated tests only: sidepanel.html?tab=<id> targets that tab instead of the active one.
+const testTab = Number(new URLSearchParams(location.search).get("tab")) || null;
+
+/**
+ * Adds the remaining lines one at a time. The portal reloads the page after each "Add claim",
+ * which stops any code inside the page, so the panel (which stays open) drives each step:
+ * fill one line and press Add claim, wait for the page to come back, check the form is empty.
+ */
+async function addLines(tabId) {
+  const n = current.claim.lines.length;
+  for (let i = current.added || 0; i < n; i++) {
+    if (!current) return; // cleared while running
+    say(`Adding service ${i + 1} of ${n}…`);
+    const line = current.claim.lines[i];
+
+    let started;
+    try {
+      started = await chrome.tabs.sendMessage(tabId, { type: "nd-fill-line", claim: current.claim, index: i });
+    } catch {
+      started = { ok: false, error: "The page stopped answering while filling." };
+    }
+    if (!started?.ok) {
+      say(`Service ${i + 1}: ${started?.error || "couldn't fill it"} Fix it, then click Fill again to carry on.`, false);
+      return;
+    }
+
+    // Wait up to 30 s for the page to reload (or update) and show an empty form.
+    const deadline = Date.now() + 30_000;
+    let outcome = "timeout";
+    await sleep(600);
+    while (Date.now() < deadline) {
+      let s = null;
+      try {
+        s = await chrome.tabs.sendMessage(tabId, { type: "nd-status", expect: { date: line.date, hours: line.hours } });
+      } catch {
+        // Page is reloading; ask again shortly.
+      }
+      if (s?.stage === "lines" && s.cleared) { outcome = "added"; break; }
+      if (s?.stage === "lines" && s.pageId !== started.pageId && s.stillFilled) { outcome = "rejected"; break; }
+      if (s && s.stage !== "lines" && s.pageId !== started.pageId) { outcome = "moved"; break; }
+      await sleep(400);
+    }
+
+    if (outcome !== "added") {
+      const why = {
+        rejected: "the portal reloaded but kept the values, so it probably didn't accept them. Check the portal for a message.",
+        moved: "the portal went to a different screen after Add claim. Check what it shows.",
+        timeout: "the portal didn't come back with an empty form. Check the portal for a message.",
+      }[outcome];
+      say(`Service ${i + 1}: ${why} Then click Fill again to carry on from this line.`, false);
+      return;
+    }
+    current.added = i + 1;
+    await chrome.storage.session.set({ claim: current });
+    render();
+    await sleep(300);
+  }
+  say(`Added all ${n} services. Check them, click Predetermine, then Process claim if it's covered.`);
+}
+
 $("fill").addEventListener("click", async () => {
   if (!current) return;
   const { groupNumber = "" } = await chrome.storage.local.get("groupNumber");
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabId = testTab ?? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   $("fill").disabled = true;
   try {
-    const res = await chrome.tabs.sendMessage(tab.id, { type: "nd-fill", claim: claimNow(), groupNumber, startAt: current.added || 0 });
-    if (res.added) {
-      current.added = (current.added || 0) + res.added;
-      await chrome.storage.session.set({ claims: current });
-      render();
+    let detected;
+    try {
+      detected = await chrome.tabs.sendMessage(tabId, { type: "nd-detect" });
+    } catch {
+      return say(NOT_PORTAL, false);
     }
-    say([res.message, ...res.problems].filter(Boolean).join(" "), res.problems.length === 0);
+
+    if (detected.stage === "lines") {
+      if ((current.added || 0) >= current.claim.lines.length) {
+        return say(`All ${current.claim.lines.length} services are already added. Check the list, then click Predetermine.`);
+      }
+      return await addLines(tabId);
+    }
+
+    if (detected.stage === "patient") {
+      const res = await chrome.tabs.sendMessage(tabId, { type: "nd-fill", claim: current.claim, groupNumber, startAt: current.added || 0 });
+      return say([res.message, ...res.problems].filter(Boolean).join(" "), res.problems.length === 0);
+    }
+
+    say("Nothing on this screen matches the claim. Open the patient search or Enter claim screen in the portal.", false);
   } catch {
-    say("This page isn't the billing portal, or it needs a reload. Open the portal's new-claim page and try again.", false);
+    say(NOT_PORTAL, false);
   } finally {
     $("fill").disabled = false;
   }
@@ -124,20 +185,13 @@ $("fill").addEventListener("click", async () => {
 $("done").addEventListener("click", async () => {
   if (!current) return;
   const { log = [] } = await chrome.storage.local.get("log");
-  log.push({ claimKey: claimNow().claimKey, lines: claimNow().lines.length, at: Date.now() });
+  log.push({ claimKey: current.claim.claimKey, lines: current.claim.lines.length, at: Date.now() });
   await chrome.storage.local.set({ log: log.slice(-200) });
+  await clearClaim("Cleared from the helper. Now click Mark submitted on this claim in the dashboard's Billing page, so the dashboard counts these days as billed.");
   renderLog();
-  if (current.index + 1 < current.claims.length) {
-    current = { ...current, index: current.index + 1, added: 0, loadedAt: Date.now() };
-    await chrome.storage.session.set({ claims: current });
-    render();
-    say(`Marked submitted. Next: ${claimName(current.index)}. Start a new claim in the portal, then click Fill this screen.`);
-    return;
-  }
-  await clearClaim(current.claims.length > 1 ? "Marked submitted. All claims done and cleared from the helper." : "Marked submitted. Claim details cleared from the helper.");
 });
 
-$("clear").addEventListener("click", () => clearClaim(current?.claims.length > 1 ? "All claims cleared." : "Claim cleared."));
+$("clear").addEventListener("click", () => clearClaim("Claim cleared."));
 
 $("saveGroup").addEventListener("click", async () => {
   await chrome.storage.local.set({ groupNumber: $("group").value.trim() });
@@ -145,8 +199,8 @@ $("saveGroup").addEventListener("click", async () => {
 });
 
 (async () => {
-  const { claims } = await chrome.storage.session.get("claims");
-  current = claims || null;
+  const { claim } = await chrome.storage.session.get("claim");
+  current = claim || null;
   const { groupNumber = "" } = await chrome.storage.local.get("groupNumber");
   $("group").value = groupNumber;
   render();
