@@ -1,3 +1,4 @@
+import { auditActor } from "./auth/auditActor";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -71,7 +72,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     }
   });
   const audit = (clientId: string, action: string, targetId: string, before: unknown, after: unknown) => {
-    db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?,?,?,?)").run(randomUUID(),clientId,action,targetId,new Date().toISOString(),"Local operator (not authenticated)",before==null?null:JSON.stringify(before),after==null?null:JSON.stringify(after));
+    db.prepare("INSERT INTO audit_events VALUES (?,?,?,?,?,?,?,?)").run(randomUUID(),clientId,action,targetId,new Date().toISOString(),auditActor(),before==null?null:JSON.stringify(before),after==null?null:JSON.stringify(after));
   };
   const getClients = (): Client[] => db.prepare("SELECT * FROM clients ORDER BY rowid").all().map(plain) as unknown as Client[];
   const getClient = (id: string): Client|undefined => { const row=db.prepare("SELECT * FROM clients WHERE id=?").get(id); return row?plain(row) as unknown as Client:undefined; };
