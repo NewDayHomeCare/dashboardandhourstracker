@@ -6,6 +6,8 @@ See [HANDOFF.md](HANDOFF.md) for architecture, test coverage, limitations, backu
 
 Requires Node 24+. Run `npm ci`, configure Google staff sign-in using [AUTH_BACKEND.md](AUTH_BACKEND.md), then run `npm run dev`. Open http://localhost:3000 on the same computer. Without Google credentials and an approved email allowlist, client pages remain locked.
 
+The login backend is merged into `main`. Teammates should follow the [localhost demo quick start](AUTH_BACKEND.md#teammate-quick-start-localhost-demo): code updates do not distribute `.env.local` secrets or synchronize local client databases. The hosted Render instance is a separate fictional-data demo; final login/logout UI and production delivery remain follow-up work.
+
 - `npm test`: calculation, persistence, billing lifecycle and helper format tests.
 - `npm run lint`: dashboard code checks.
 - `npm run build` and `npm start`: demo build.

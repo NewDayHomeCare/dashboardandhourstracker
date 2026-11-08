@@ -1,10 +1,10 @@
 # Current implementation and team handoff
 
-This is a **single-computer prototype**, not a hosted clinical or financial production system.
+This is a **local SQLite prototype with a separate hosted fictional-data demo**, not a clinical or financial production system. See [AUTH_BACKEND.md](AUTH_BACKEND.md) for the Google login status, teammate setup, and storage differences.
 
 ## Start
 
-Requires Node 24+. Run `npm ci`, then `npm run dev` (development) or `npm run build` followed by `npm start` (demo). Open http://127.0.0.1:3000 on the same computer. Keep it bound to loopback; the app has no authentication.
+Requires Node 24+. Configure the private `.env.local` using [AUTH_BACKEND.md](AUTH_BACKEND.md), run `npm ci`, then `npm run dev -- --hostname 127.0.0.1 --port 3000` (development) or `npm run build` followed by `npm start -- --hostname 127.0.0.1 --port 3000` (local demo). Open http://localhost:3000 on the same computer. Google sign-in and an exact email allowlist protect pages and data operations. Shared company-network access requires separate setup.
 
 The normal clock uses the current UTC date. To opt into a fixed demo clock, set NEXT_PUBLIC_HOMECARE_DEMO_DATE in .env.local using the .env.example template, then restart development or rebuild the production app. The global operating notice clearly identifies the mode. Tests use an isolated fixed date.
 
@@ -32,7 +32,7 @@ The normal clock uses the current UTC date. To opt into a fixed demo clock, set 
 7. A recorded submission snapshots the selected services and rate. Later changes to returned services cannot rewrite the old snapshot.
 8. A returned batch releases all its services to unbilled without restoring remaining allowance. A new submission creates a new batch/reference. Full payment changes only the claim status. Partial returns/payments are not implemented.
 9. Legacy billed services remain billed, but no submission date, external reference or payment status is invented for them.
-10. Audit records capture before/after, timestamp and a **self-described local operator**, not a verified user. It is not a tamper-proof compliance audit system.
+10. Audit records capture before/after and timestamp. New authenticated changes record the signed-in staff email; older records retain their original local-operator labels. This is not a tamper-proof compliance audit system.
 
 ## Verification
 
@@ -42,7 +42,7 @@ These checks reduce risk; they cannot prove that every unexpected situation is c
 
 ## Data and backups
 
-Default file: `data/homecare.sqlite`. Set server-only `HOMECARE_DB_PATH` to change it. Keep it outside cloud-synced folders if it must stay on this computer. All SQLite files and `data/` are ignored by Git. GitHub stores application code, **not** the client database.
+Default file: `data/homecare.sqlite`, on the machine running the backend. A local instance stores it on that computer; a hosted instance stores it on the server. Set server-only `HOMECARE_DB_PATH` to change it. Keep it outside cloud-synced folders if it must stay on this computer. All SQLite files and `data/` are ignored by Git. GitHub stores application code, **not** the client database. The current free Render demo can lose this file on restart/redeploy and must use fictional records only.
 
 Before this schema upgrade, existing databases automatically get a snapshot under `data/backups/`. Run `npm run backup` for an additional consistent snapshot. A backup on the same drive does not protect against drive loss; arrange a protected recovery copy with the organization.
 
@@ -51,7 +51,7 @@ Restore only with the server stopped: preserve the current file, copy the intend
 ## Still required before real client use
 
 - Confirm rate history and effective dates, monthly allowance/proration/backdating, claim line limits, deadline counting, actual biweekly schedule, and concurrent-caregiver rules.
-- Login/access control, verified identity, protected backups and a tested restore procedure, device/disk protection, organization-approved deployment/privacy review.
+- Final login/logout UI and environment-specific authentication acceptance checks; protected backups and a tested restore procedure, device/disk protection, and organization-approved deployment/privacy review. The Google authentication backend is implemented, but does not by itself establish production readiness.
 - Operator onboarding and client/authorization onboarding. There is no complete create/import-client workflow.
 - External schedule/billing integration and reconciliation. Manual status recording is not proof of external acceptance/payment.
 - Per-service time or caregiver identifiers for better duplicate checks; reliable automated duplicate import keys; approval-document linkage.
