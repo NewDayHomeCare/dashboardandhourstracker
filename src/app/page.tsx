@@ -1,3 +1,4 @@
+import { requireStaffPage } from "@/lib/auth/staffSession";
 import { UnbilledQueue } from "@/components/UnbilledQueue";
 import { MonthPicker } from "@/components/MonthPicker";
 // Hours overview: every client's hours this month. Design from the Figma Make prototype.
@@ -11,10 +12,11 @@ import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
 export const dynamic = "force-dynamic";
 
 export default async function Overview({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  await requireStaffPage();
   const month = selectedMonth((await searchParams).month);
-  const clients = getClients();
-  const approvals = getApprovals();
-  const visits = getVisits();
+  const clients = await getClients();
+  const approvals = await getApprovals();
+  const visits = await getVisits();
 
   const rows: ClientRow[] = clients.map((c) => {
     const oldest = oldestUnsubmitted(visits, c.id);

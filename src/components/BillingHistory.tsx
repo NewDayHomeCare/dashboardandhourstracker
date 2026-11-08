@@ -2,8 +2,8 @@ import { getClients } from "@/lib/data";
 import { BatchStatusActions } from "./BillingControls";
 import type { BillingBatch } from "@/lib/types";
 import { formatHours, formatMoney, costCents } from "@/lib/engine";
-export function BillingHistory({batches}:{batches:BillingBatch[]}) {
-  const clients = getClients();
+export async function BillingHistory({batches}:{batches:BillingBatch[]}) {
+  const clients = await getClients();
   return <section aria-label="Submission history" className="mb-6 rounded-2xl border border-line bg-white p-5"><h2 className="font-bold">Submission history</h2>
     <p className="my-2 text-xs text-muted">Local records only. Verify submission and full payment in the external system. Historical billed records may have no batch reference.</p>
     {!batches.length&&<p className="py-3 text-sm text-muted">No submissions recorded here yet.</p>}

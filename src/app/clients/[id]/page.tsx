@@ -1,3 +1,4 @@
+import { requireStaffPage } from "@/lib/auth/staffSession";
 import { BillingHistory } from "@/components/BillingHistory";
 import { MonthPicker } from "@/components/MonthPicker";
 import { ServiceActions } from "@/components/ServiceActions";
@@ -15,17 +16,19 @@ import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
 export const dynamic = "force-dynamic";
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ month?: string }> }) {
+  await requireStaffPage();
   const { id } = await params;
-  const client = getClient(id);
+  const client = await getClient(id);
   if (!client) notFound();
 
   const month = selectedMonth((await searchParams).month);
-  const allApprovals = getApprovals();
-  const allVisits = getVisits();
+  const allApprovals = await getApprovals();
+  const allVisits = await getVisits();
   const approvals = allApprovals.filter((a) => a.clientId === id);
   const visits = allVisits.filter((v) => v.clientId === id);
   const s = monthSummary(approvals, visits, id, month);
-  const pick = getClients().map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName }));
+  const [clients,batches,audit] = await Promise.all([getClients(),getBatches(),getAudit(id)]);
+  const pick = clients.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName }));
 
   const first = firstOfMonth(month);
   const leadingBlanks = new Date(`${first}T00:00:00Z`).getUTCDay();
@@ -84,8 +87,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         </table>
         {!visits.some(v => v.date.startsWith(month)) && <p className="py-6 text-muted">No service records for this month.</p>}
       </section>
-      <BillingHistory batches={getBatches().filter(b=>b.clientId===id)} />
-      <section className="mb-6 rounded-2xl border border-line bg-white p-5"><h2 className="font-bold">Change history</h2><p className="my-2 text-xs text-muted">Local operator is not authenticated. Historical changes before this upgrade are unavailable.</p><ul className="max-h-72 overflow-y-auto space-y-2">{getAudit(id).slice(0,100).map(event=><li className="border-b py-2 text-sm" key={event.id}><p>{event.at} · {event.action.replaceAll("_"," ")}</p><details className="text-xs text-muted"><summary>Before / after</summary><pre className="overflow-x-auto whitespace-pre-wrap">{event.beforeJson ?? "—"}{"\n→\n"}{event.afterJson ?? "—"}</pre></details></li>)}</ul></section>
+      <BillingHistory batches={batches.filter(b=>b.clientId===id)} />
+      <section className="mb-6 rounded-2xl border border-line bg-white p-5"><h2 className="font-bold">Change history</h2><p className="my-2 text-xs text-muted">New changes identify the authenticated staff account. Older records may show an unauthenticated local operator.</p><ul className="max-h-72 overflow-y-auto space-y-2">{audit.slice(0,100).map(event=><li className="border-b py-2 text-sm" key={event.id}><p>{event.at} · {event.action.replaceAll("_"," ")}</p><details className="text-xs text-muted"><summary>Before / after</summary><pre className="overflow-x-auto whitespace-pre-wrap">{event.beforeJson ?? "—"}{"\n→\n"}{event.afterJson ?? "—"}</pre></details></li>)}</ul></section>
       <div className="flex flex-wrap gap-6">
         <section aria-labelledby="cal-title" className="min-w-0 flex-[999_1_480px] rounded-2xl border border-line bg-white p-5">
           <h2 id="cal-title" className="mb-4 text-base font-bold text-slate-900">{formatMonth(month)}</h2>
