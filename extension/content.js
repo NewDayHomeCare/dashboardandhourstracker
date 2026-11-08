@@ -11,6 +11,16 @@
 (() => {
   const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const tick = () => new Promise((r) => setTimeout(r, 40));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms || 0));
+
+  async function waitFor(check, timeoutMs) {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      if (check()) return true;
+      await sleep(100);
+    }
+    return check();
+  }
   const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
 
   function labelOf(el) {
@@ -115,15 +125,39 @@
 
   async function fillLine(line, index, map) {
     const at = map.lineMode === "rows" ? index : 0;
-    const get = (prefix) => {
-      const el = findFields(prefix)[at];
-      if (!el) throw new Error(`Couldn't find the "${prefix}" box.`);
+    // Look each box up again right before using it: the page may have rebuilt it.
+    const get = (spec) => {
+      const el = findFields(spec)[at];
+      if (!el) throw new Error(`Couldn't find the "${spec.replace(/^name=.*:/, "")}" box.`);
       return el;
     };
+    const service = line.serviceType || map.defaults.serviceType;
     await fillDate(get(map.line.date), line.date, map);
-    if (map.line.serviceType) setValue(get(map.line.serviceType), line.serviceType || map.defaults.serviceType);
+    await sleep(map.fieldDelayMs);
+    if (map.line.serviceType) {
+      setValue(get(map.line.serviceType), service);
+      await sleep(map.fieldDelayMs);
+    }
     setValue(get(map.line.hours), line.hours.toFixed(2));
+    await sleep(map.fieldDelayMs);
     setValue(get(map.line.cost), line.cost);
+    await sleep(map.fieldDelayMs);
+
+    // Check the portal kept what was typed (only our own values are read back).
+    const num = (v) => Number(String(v).replace(/[$,\s]/g, ""));
+    const kept =
+      get(map.line.date).value.includes(line.date) &&
+      num(get(map.line.hours).value) === line.hours &&
+      num(get(map.line.cost).value) === Number(line.cost) &&
+      (!map.line.serviceType || norm(get(map.line.serviceType).selectedOptions?.[0]?.textContent || get(map.line.serviceType).value) === norm(service));
+    return kept;
+  }
+
+  /** Fills one line, retrying once if the portal dropped a value. */
+  async function fillLineChecked(line, index, map) {
+    if (await fillLine(line, index, map)) return;
+    await sleep(500);
+    if (!(await fillLine(line, index, map))) throw new Error("The portal didn't keep the values. Check the boxes and try again.");
   }
 
   /**
@@ -191,13 +225,20 @@
               safeClick(findButton(map.addLineButton), map);
               await tick();
             }
-            await fillLine(claim.lines[i], i, map);
+            await fillLineChecked(claim.lines[i], i, map);
           } else {
-            await fillLine(claim.lines[i], i, map);
+            await fillLineChecked(claim.lines[i], i, map);
             const add = findButton(map.addLineButton);
             if (!add) throw new Error(`Couldn't find the "${map.addLineButton}" button.`);
             safeClick(add, map);
-            await tick();
+            // Count the line only once the form clears. If the portal shows an error instead,
+            // stop here so nothing is overwritten.
+            const cleared = await waitFor(() => {
+              const h = findFields(map.line.hours)[0];
+              return !!h && h.value === "";
+            }, map.addTimeoutMs || 2000);
+            if (!cleared) throw new Error(`"${map.addLineButton}" didn't go through. Check the portal for a message, fix it, then click Fill again.`);
+            await sleep(map.fieldDelayMs);
           }
           added++;
         } catch (e) {
