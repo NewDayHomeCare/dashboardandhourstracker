@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "results": [
+    "Invalid clipboard rejected",
+    "Returning mock patient found and identity populated",
+    "Two decimal-hour lines autofilled across reloads; submission not clicked",
+    "Repeated Fill does not duplicate completed lines",
+    "Manual mock submission then helper clears claim and records minimal log"
+  ],
+  "scope": "Chrome APIs mocked; real extension scripts; mock portal only"
+}

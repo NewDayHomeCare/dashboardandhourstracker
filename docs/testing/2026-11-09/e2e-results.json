@@ -1,0 +1,54 @@
+{
+  "results": [
+    {
+      "name": "Unauthenticated pages redirect without client data",
+      "status": "PASS"
+    },
+    {
+      "name": "Nonallowlisted, unverified, expired sessions rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Zero/negative/excess/too-precise scheduled hours blocked",
+      "status": "PASS"
+    },
+    {
+      "name": "Schedule 6 -> confirm actual 5.25 once -> unsubmitted service",
+      "status": "PASS"
+    },
+    {
+      "name": "Billing copies exact decimal hours and rounded cost without submitting",
+      "status": "PASS"
+    },
+    {
+      "name": "Submission -> return -> resubmission -> full payment",
+      "status": "PASS"
+    },
+    {
+      "name": "Balance stays 94.75 after submission/payment and month navigation",
+      "status": "PASS"
+    },
+    {
+      "name": "Month-end recurrence and cancellation with reason",
+      "status": "PASS"
+    },
+    {
+      "name": "Malformed URL parameters and unknown client handled",
+      "status": "PASS"
+    },
+    {
+      "name": "Mobile navigation and page runtime smoke",
+      "status": "PASS"
+    },
+    {
+      "name": "BUG: stale schedule save overwrites newer hours without conflict rejection",
+      "status": "CONFIRMED",
+      "finalHours": 3
+    },
+    {
+      "name": "Two stale schedule windows: detect overwrite behavior",
+      "status": "PASS"
+    }
+  ],
+  "pageErrors": []
+}
