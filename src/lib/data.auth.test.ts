@@ -11,7 +11,7 @@ beforeEach(()=>{delete globalStore.__hoursDatabase;vi.clearAllMocks();});
 describe("authenticated data boundary",()=>{
  it("rejects reads and writes before opening any client database",async()=>{
    mocks.identity.mockRejectedValue(new StaffAccessError());
-   const attempts=[()=>data.getClients(),()=>data.getClient("c"),()=>data.getApprovals(),()=>data.getVisits(),()=>data.getBatches(),()=>data.getAudit(),()=>data.addService({clientId:"c",date:"2026-11-06",hours:2,requestId:"test"}),()=>data.removeService("v",2,1),()=>data.changeBatchStatus("b","paid","test")];
+   const attempts=[()=>data.reviewSchedule({scheduleId:"s",expectedVersion:1,outcome:"completed",hours:2,requestId:"r"}),()=>data.scheduleCare({clientId:"c",dates:["2026-11-08"],hours:2}),()=>data.getSchedule(),()=>data.getClients(),()=>data.getClient("c"),()=>data.getApprovals(),()=>data.getVisits(),()=>data.getBatches(),()=>data.getAudit(),()=>data.addService({clientId:"c",date:"2026-11-06",hours:2,requestId:"test"}),()=>data.removeService("v",2,1),()=>data.changeBatchStatus("b","paid","test")];
    for(const call of attempts)await expect(call()).rejects.toBeInstanceOf(StaffAccessError);
    expect(mocks.open).not.toHaveBeenCalled();
  });

@@ -1,13 +1,14 @@
 import { requireStaffPage } from "@/lib/auth/staffSession";
-import { UnbilledQueue } from "@/components/UnbilledQueue";
+import Link from "next/link";
 import { MonthPicker } from "@/components/MonthPicker";
+import { UnbilledQueue } from "@/components/UnbilledQueue";
 // Hours overview: every client's hours this month. Design from the Figma Make prototype.
 
 import { getApprovals, getClients, getSchedule, getVisits } from "@/lib/data";
 import { daysLeftToBill, deadlineStatus, formatHours, monthSummary, oldestUnsubmitted } from "@/lib/engine";
-import { formatMonth, selectedMonth } from "@/lib/dates";
+import { formatMonth, selectedMonth, today } from "@/lib/dates";
 import { ClientTable, type ClientRow } from "@/components/ClientTable";
-import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
+import { EditApprovalButton } from "@/components/HoursDialogs";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function Overview({ searchParams }: { searchParams: Promise
   const projected = rows.reduce((t, r) => t + r.summary.projectedHours, 0);
   const approved = rows.reduce((t, r) => t + r.summary.approvedHours, 0);
   const goingOver = rows.filter((r) => r.summary.status === "over" || r.summary.status === "will-go-over");
-  const unused = rows.filter((r) => r.summary.status === "unused");
+  const unused = rows.filter((r) => r.summary.projectedLeft > 0);
   const unusedHours = unused.reduce((t, r) => t + Math.max(r.summary.projectedLeft, 0), 0);
   const billingRisk = rows.filter((r) => r.deadline && r.deadline.status !== "ok").length;
   const pick = clients.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName }));
@@ -45,25 +46,30 @@ export default async function Overview({ searchParams }: { searchParams: Promise
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-brand">Client management</p>
           <h1 className="text-3xl font-bold tracking-[-0.035em] text-slate-950 sm:text-[34px]">Hours overview</h1>
           <p className="mt-2 text-sm text-muted">
-            {formatMonth(month)} · the goal is to use every approved hour without going over. Unused hours don&apos;t carry over.
+            {formatMonth(month)} · track completed care and upcoming scheduled hours. Unused hours don&apos;t carry over.
           </p>
         </div>
         <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
           <MonthPicker month={month} />
           <EditApprovalButton key={`approval-${month}`} month={month} clients={pick} approvals={approvals} visits={visits} schedule={schedule} />
-          <AddHoursButton key={`hours-${month}`} month={month} clients={pick} approvals={approvals} visits={visits} schedule={schedule} />
         </div>
       </section>
 
+      <nav aria-label="Next tasks" className="mb-6 flex flex-wrap gap-4 rounded-2xl border border-line bg-white p-5">
+        <Link href="/review" className="font-bold text-brand underline">Review {schedule.filter(d => d.date <= today()).length} scheduled day(s)</Link>
+        <Link href="/billing" className="font-bold text-brand underline">Prepare billing</Link>
+        <Link href="/schedule" className="font-bold text-brand underline">Arrange upcoming care</Link>
+      </nav>
       <section aria-label="Summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Tile label="Hours used this month" value={formatHours(used)} sub={`+ ${formatHours(projected)} h projected, of ${formatHours(approved)} h approved · ${clients.length} clients`} />
-        <Tile label="Going over approved" value={String(goingOver.length)} sub="clients, used + projected" tone={goingOver.length ? "bad" : undefined} />
-        <Tile label="Hours likely left unused" value={formatHours(unusedHours)} sub={`across ${unused.length} clients`} tone={unused.length ? "warn" : undefined} />
+        <Tile label="Completed hours this month" value={formatHours(used)} sub={`+ ${formatHours(projected)} h upcoming scheduled, of ${formatHours(approved)} h approved · ${clients.length} clients`} />
+        <Tile label="Over allowance / at risk" value={String(goingOver.length)} sub="clients whose completed or scheduled care exceeds their allowance" tone={goingOver.length ? "bad" : undefined} />
+        <Tile label="Hours available after upcoming care" value={formatHours(unusedHours)} sub={`across ${unused.length} clients`} />
         <Tile label="Billing deadlines (all months)" value={String(billingRisk)} sub="clients with urgent, approaching or expired deadlines" tone={billingRisk ? "bad" : undefined} />
       </section>
 
-      <p className="mb-3 text-sm text-muted">Used = billed + unbilled. Projected = care scheduled after today, plus an estimate from the last 4 weeks for unscheduled days. Remaining = approved − (used + projected). Billed means submitted, not paid.</p>
-      <UnbilledQueue visits={visits} clients={clients}/>
+      <p className="mb-3 text-sm text-muted">Remaining now = monthly allowance − completed hours. Upcoming scheduled care is shown separately and includes only dates after today. No historical estimates. Submitting a claim does not deduct hours again.</p>
+
+      <UnbilledQueue visits={visits} clients={clients} />
       <ClientTable rows={rows} month={month} />
     </>
   );

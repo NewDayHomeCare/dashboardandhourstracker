@@ -108,13 +108,12 @@ export function hoursUsed(visits: Visit[], clientId: string, month: YearMonth): 
 }
 
 /**
- * Hours expected for the rest of the month after `onDate`:
- * - scheduled care on days after today, as entered (days without a schedule in between mean no care);
- * - plus, in the current month, an estimate for the days after the last scheduled day, from the
- *   client's average hours per day over the last projectionLookbackDays.
+ * Explicitly scheduled care after `onDate`, within the selected month.
+ * Never infer future care from past usage. Due plans need the separate review workflow;
+ * they are not automatically treated as completed services here.
  */
 export function projectedHours(
-  visits: Visit[],
+  _visits: Visit[],
   schedule: ScheduledDay[],
   clientId: string,
   month: YearMonth,
@@ -126,23 +125,10 @@ export function projectedHours(
 
   const planned = schedule.filter((d) => d.clientId === clientId && d.date >= start && d.date <= end);
   const scheduled = planned.reduce((sum, d) => sum + toHundredths(d.hours), 0);
-  const lastPlanned = planned.map((d) => d.date).sort().at(-1);
-
-  let pace = 0;
-  if (monthOf(onDate) === month) {
-    const lookback = settings.projectionLookbackDays;
-    const from = addDays(onDate, -(lookback - 1));
-    const recent = visits
-      .filter((v) => v.clientId === clientId && v.date >= from && v.date <= onDate)
-      .reduce((sum, v) => sum + toHundredths(v.hours), 0);
-    const unplannedDays = daysBetween(lastPlanned ? addDays(lastPlanned, 1) : start, end) + 1;
-    pace = Math.max(0, Math.round((recent / lookback) * unplannedDays));
-  }
-
   return {
     scheduledHours: fromHundredths(scheduled),
-    projectedHours: fromHundredths(scheduled + pace),
-    projectionSource: scheduled && pace ? "schedule+pace" : scheduled ? "schedule" : pace ? "pace" : "none",
+    projectedHours: fromHundredths(scheduled),
+    projectionSource: scheduled ? "schedule" : "none",
   };
 }
 

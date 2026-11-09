@@ -11,7 +11,6 @@ import { formatHours, monthSummary } from "@/lib/engine";
 import { addDays, daysInMonth, firstOfMonth, formatDate, formatMonth, selectedMonth, today } from "@/lib/dates";
 import { StatusBadge } from "@/components/StatusBadge";
 import { HoursBar } from "@/components/HoursBar";
-import { RemoveScheduledDay } from "@/components/RemoveScheduledDay";
 import { Avatar } from "@/components/Icon";
 import { AddHoursButton, EditApprovalButton } from "@/components/HoursDialogs";
 
@@ -68,27 +67,27 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       </section>
 
       <section aria-label="Selected month" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Stat label="Approved" value={s.approvedHours} sub={s.bankedHours > 0 ? `includes ${formatHours(s.bankedHours)} h banked` : undefined} />
-        <Stat label="Used" value={s.usedHours} sub={`${formatHours(s.billedHours)} billed · ${formatHours(s.unbilledHours)} unbilled`} />
-        <Stat label="Projected to month end" value={s.projectedHours} sub={{ schedule: "from scheduled care", pace: "estimate from the last 4 weeks", "schedule+pace": "scheduled care + estimate after it", none: undefined }[s.projectionSource]} />
-        <Stat label={s.projectedLeft < 0 ? "Over after projected" : "Remaining after projected"} value={Math.abs(s.projectedLeft)} bad={s.projectedLeft < 0} />
-        <Stat label="Remaining now" value={s.leftHours} bad={s.leftHours < 0} sub="approved − used" />
+        <Stat label="Monthly allowance" value={s.approvedHours} sub={s.bankedHours > 0 ? `includes ${formatHours(s.bankedHours)} h banked` : undefined} />
+        <Stat label="Completed hours" value={s.usedHours} sub={`${formatHours(s.billedHours)} submitted · ${formatHours(s.unbilledHours)} not submitted`} />
+        <Stat label="Remaining now" value={s.leftHours} bad={s.leftHours < 0} sub="allowance − completed hours" />
+        <Stat label="Upcoming scheduled" value={s.projectedHours} sub="Entered care after today; no estimates" />
+        <Stat label={s.projectedLeft < 0 ? "Over after upcoming care" : "Remaining after upcoming care"} value={Math.abs(s.projectedLeft)} bad={s.projectedLeft < 0} />
       </section>
       <div className="mb-6 rounded-2xl border border-line bg-white p-5">
         <HoursBar s={s} width="w-full" />
         <p className="mt-2 text-sm text-muted">
-          {formatHours(s.usedHours)} h used + {formatHours(s.projectedHours)} h projected = {formatHours(s.projectedTotal)} h of {formatHours(s.approvedHours)} h approved
+          {formatHours(s.usedHours)} h completed + {formatHours(s.projectedHours)} h upcoming scheduled = {formatHours(s.projectedTotal)} h of {formatHours(s.approvedHours)} h approved
         </p>
       </div>
 
       <section aria-label="Service records" className="mb-6 overflow-x-auto rounded-2xl border border-line bg-white p-5">
         <h2 className="text-base font-bold">Service records - {formatMonth(month)}</h2>
-        <p className="mt-2 mb-4 text-sm text-muted">Used = billed + unbilled. Billed means submitted in the portal, not paid. Each row is one service. Multiple services on the same date can have different billing states.</p>
+        <p className="mt-2 mb-4 text-sm text-muted">Completed hours include both submitted and not submitted services. Submitted does not mean paid. Each row is one service. Multiple services on the same date can have different billing states.</p>
         <table className="w-full min-w-[650px] text-left text-sm">
           <thead><tr className="border-b border-line"><th className="py-3">Service date</th><th>Hours</th><th>Billing status / note</th><th>Actions</th></tr></thead>
           <tbody>{visits.filter(v => v.date.startsWith(month)).sort((a, b) => a.date.localeCompare(b.date)).map(v => (
             <tr key={v.id} className="border-b border-line"><td className="py-3">{v.date}</td><td>{formatHours(v.hours)} h</td>
-              <td>{v.submitted ? "Billed" : "Unbilled"}<p className="max-w-xs text-xs text-muted break-words">{v.note}</p></td>
+              <td>{v.submitted ? "Submitted" : "Not submitted"}<p className="max-w-xs text-xs text-muted break-words">{v.note}</p></td>
               <td><div className="flex flex-wrap items-center gap-2">
                 {!v.submitted && <AddHoursButton key={`${v.id}-${v.hours}`} clients={pick} approvals={allApprovals} visits={allVisits} schedule={allSchedule}
                   defaultClientId={id} month={month} defaultDate={v.date} defaultHours={v.hours} serviceId={v.id} expectedVersion={v.version} buttonLabel="Edit" primary={false} />}
@@ -101,18 +100,19 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       </section>
       <section aria-label="Scheduled care" className="mb-6 rounded-2xl border border-line bg-white p-5">
         <h2 className="text-base font-bold">Scheduled care - {formatMonth(month)}</h2>
-        <p className="mt-2 mb-4 text-sm text-muted">Days after today. They count toward projected hours and are never billed; add the completed hours once each visit happens. Use Add hours with a later date or Repeat to schedule more.</p>
+        <p className="mt-2 mb-4 text-sm text-muted">Days after today. Arrange care on the Schedule page; confirm actual hours on Review care.</p>
+        <p className="mb-4 flex gap-4"><Link className="font-semibold text-brand underline" href="/schedule">Schedule care</Link><Link className="font-semibold text-brand underline" href="/review">Review due care ({schedule.filter(d => d.date <= today()).length})</Link></p>
         {upcoming.length ? (
           <ul className="flex flex-wrap gap-2 text-sm">
             {upcoming.map((d) => (
               <li key={d.date} className="flex items-center gap-1 rounded-lg border border-dashed border-brand py-1 pl-3 pr-1">
                 <span>{formatDate(d.date)} · {formatHours(d.hours)} h</span>
-                <RemoveScheduledDay clientId={id} date={d.date} />
+                <Link href="/schedule" className="px-2 text-brand underline">Manage</Link>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted">Nothing scheduled after today this month{s.projectionSource === "pace" ? ", so the projection is an estimate from the last 4 weeks" : ""}.</p>
+          <p className="text-sm text-muted">Nothing scheduled after today this month.</p>
         )}
       </section>
       <BillingHistory batches={batches.filter(b=>b.clientId===id)} />
@@ -147,7 +147,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted">Green = used, not billed yet. Grey = submitted in the portal. Dashed = scheduled.</p>
+          <p className="mt-3 text-xs text-muted">Green = completed, not submitted yet. Grey = submitted in the portal. Dashed = scheduled.</p>
         </section>
 
         <section aria-labelledby="hist-title" className="flex flex-[1_1_300px] flex-col gap-3 rounded-2xl border border-line bg-white p-5">

@@ -11,7 +11,7 @@ export function HoursBar({ s, width = "w-40" }: { s: MonthSummary; width?: strin
   const projected = (s.projectedHours / scale) * 100;
   const approvedAt = (s.approvedHours / scale) * 100;
   const over = s.projectedTotal > s.approvedHours;
-  const label = `${formatHours(s.usedHours)} used and ${formatHours(s.projectedHours)} projected of ${formatHours(s.approvedHours)} approved hours`;
+  const label = `${formatHours(s.usedHours)} completed and ${formatHours(s.projectedHours)} upcoming scheduled of ${formatHours(s.approvedHours)} approved hours`;
 
   return (
     <div role="img" aria-label={label} className={`relative h-2.5 ${width} overflow-hidden rounded-full ${over ? "bg-bad-soft" : "bg-slate-100"}`}>

@@ -8,7 +8,9 @@ import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
-  { href: "/", label: "Hours overview", icon: "dashboard" },
+  { href: "/", label: "Overview", icon: "dashboard" },
+  { href: "/schedule", label: "Schedule", icon: "calendar" },
+  { href: "/review", label: "Review care", icon: "check" },
   { href: "/billing", label: "Billing", icon: "billing" },
 ];
 

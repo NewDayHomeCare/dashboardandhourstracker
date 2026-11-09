@@ -2,10 +2,10 @@ import type { ClientStatus, DeadlineStatus } from "@/lib/types";
 import { Icon } from "./Icon";
 
 export const STATUS_LABEL: Record<ClientStatus, string> = {
-  over: "Over approved",
-  "will-go-over": "Risk of overuse",
+  over: "Over allowance",
+  "will-go-over": "Scheduled care exceeds allowance",
   "on-track": "On track",
-  unused: "Hours left unused",
+  unused: "Hours available",
 };
 
 const CLIENT_CLS: Record<ClientStatus, string> = {

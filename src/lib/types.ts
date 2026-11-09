@@ -49,6 +49,9 @@ export interface Visit {
 
 /** Care planned for a day that hasn't happened yet. Counts toward projected hours, never billed. */
 export interface ScheduledDay {
+  /** Stable identity and revision supplied by persistent storage. */
+  id?: string;
+  version?: number;
   clientId: string;
   date: ISODate;
   hours: number;
@@ -76,9 +79,9 @@ export interface MonthSummary {
   bankedHours: number;
   /** Hours scheduled after today in the month. */
   scheduledHours: number;
-  /** Hours expected for the rest of the month: scheduled, plus an estimate for unscheduled days. */
+  /** Compatibility field: explicitly scheduled hours after today; no historical estimate. */
   projectedHours: number;
-  projectionSource: "schedule" | "pace" | "schedule+pace" | "none";
+  projectionSource: "schedule" | "none";
   /** usedHours + projectedHours */
   projectedTotal: number;
   /** approvedHours - projectedTotal (negative = expected to go over) */

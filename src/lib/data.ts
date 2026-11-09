@@ -33,3 +33,5 @@ export const removeService=(...args:Parameters<Store["removeService"]>)=>usingDa
 export const submitBatch=(input:Parameters<Store["submitBatch"]>[0])=>usingDatabase(db=>db.submitBatch(input));
 export const changeBatchStatus=(...args:Parameters<Store["changeBatchStatus"]>)=>usingDatabase(db=>db.changeBatchStatus(...args));
 export const batchTotal=(batch:Parameters<Store["batchTotal"]>[0])=>usingDatabase(db=>db.batchTotal(batch));
+
+export const reviewSchedule=(input:Parameters<Store["reviewSchedule"]>[0])=>usingDatabase(db=>db.reviewSchedule(input));
