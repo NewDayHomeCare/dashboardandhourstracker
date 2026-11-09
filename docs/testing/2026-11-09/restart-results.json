@@ -1,0 +1,30 @@
+{
+  "restoredAppBalance": 94.75,
+  "paymentVisible": true,
+  "sizes": [
+    {
+      "route": "/",
+      "viewport": 390,
+      "document": 390,
+      "height": 7799
+    },
+    {
+      "route": "/schedule",
+      "viewport": 390,
+      "document": 390,
+      "height": 29964
+    },
+    {
+      "route": "/review",
+      "viewport": 390,
+      "document": 390,
+      "height": 1099
+    },
+    {
+      "route": "/billing",
+      "viewport": 390,
+      "document": 390,
+      "height": 23906
+    }
+  ]
+}

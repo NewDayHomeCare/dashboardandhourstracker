@@ -1,0 +1,9 @@
+{
+  "backup": "homecare-2026-11-09T16-01-33.494Z.sqlite",
+  "backupRestored": true,
+  "integrity": "ok",
+  "confirmedHours": 5.25,
+  "paymentStatus": "paid",
+  "uncommittedTransactionAfterForcedProcessStop": "rolled back",
+  "scope": "Synthetic SQLite copy; does not test physical disk failure or loss of the original and backup disk"
+}
