@@ -1,15 +1,11 @@
-## Fixes
+# Documentation update: describe the current dashboard
 
-- Keep overdue/approaching unbilled services visible across all months while monthly balances remain isolated. Add dated links to service details and billing periods.
-- Replace hours-only stale checks with persistent integer service revisions for edits, deletes, submissions and UI undo requests. Note-only concurrent changes are no longer silently overwritten.
-- Preserve original claim snapshots when a teammate's partial Undo action is used. Track locally undone IDs separately and display active claim totals accordingly.
-- Default to the real UTC clock. Fixed demonstration dates are opt-in via the documented environment variable and clearly labeled.
-- Display unverified calculation assumptions globally. No rate or allowance policy is claimed as verified.
+The homepage previously led with old sample-file work and did not explain the functionality merged in PR #35. This update makes the four-page workflow, balance definitions and schedule confirmation the project introduction.
 
-## Validation
+- Rewrite README around Overview, Schedule, Review care and Billing.
+- Retain the Unbilled services reminder and explain its all-month scope.
+- Align handoff and workflow documents with current code and button names.
+- Update the protected-page list and correct outdated extension descriptions.
+- Keep historical sample files separate from the product introduction.
 
-Automated regressions cover cross-month deadline queues, unchanged monthly balances, stale note-only edits/deletes/submissions, same-instant version changes, revision persistence, partial undo/resubmission/payment, and existing-ledger migration/backup. Production build and browser workflow checks are required before merging.
-
-## Review
-
-Includes current main and preserves Chrome helper support. No import integration, authentication, or real-policy verification is introduced. Review shared Visit/Claim types and UndoSubmitted inputs. SQLite files, backups and .env.local stay out of Git; .env.example is an inert template. Please review this new branch and merge through a PR rather than pushing directly to main.
+Validation: compare descriptions with origin/main, check relative documentation links and review the documentation diff. This change does not add or modify application features.

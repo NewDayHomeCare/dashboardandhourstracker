@@ -24,7 +24,8 @@ again; stops on a bad line and resumes from it; refuses to press Predetermine.
 4. **Predetermine:** staff check the list and click **Predetermine**, then **Process claim**.
 5. Click **Mark submitted** in the panel. If more claims were loaded for this client, the next one
    loads: click **Enter another claim** in the portal and repeat from step 1. After the last claim,
-   everything is wiped from the helper.
+   the active claim is cleared; the submission log remains.
+6. Return to Dashboard Billing and choose **Record portal submission**, entering the actual reference and date. The helper does not update dashboard records.
 
 ## Try it (5 minutes)
 
@@ -47,8 +48,8 @@ After changing extension files, click reload on `chrome://extensions` and reload
 | Date of birth | Never held by the helper. Staff enter it, or the portal's own returning-patient lookup fills it. (Tested: a date of birth in a pasted claim is dropped.) |
 | Data left on the computer | The claim lives in `chrome.storage.session`: memory only, never written to disk, wiped when Chrome closes. Also cleared on the last **Mark submitted**, **Clear claim**, or after 15 minutes on one claim. |
 | Other code reading it | Session storage is limited to the extension's own pages, so the script inside the portal page can't read it. That script gets the claim only at the moment of filling and keeps nothing. |
-| Data sent somewhere | No network permissions, no remote code, no analytics. The extension cannot send data anywhere. |
-| Running on other sites | Runs only on pages listed in `manifest.json` (localhost now; add only the real portal's address later). |
+| Data sent somewhere | No network permissions, no remote code, no analytics. The helper writes claim details into the open portal page. Staff submit them there; this is not a guarantee that client data never leaves the computer. |
+| Running on other sites | Runs only on pages listed in `manifest.json` (localhost, 127.0.0.1, and https://provider.ab.bluecross.ca/* in the current manifest). |
 | Clipboard | Cleared after a claim is loaded. |
 | Logs | The "submitted" log stores a claim reference (internal client code and the claim's first and last service dates), line count and time. No names or IDs. |
 | Accidental submission | Never stores passwords. Refuses to press Predetermine, Process claim, Submit or Cancel (`neverClick` in `fieldmap.js`). Presses only "Add claim", which adds a line to the claim being built. |
@@ -67,13 +68,13 @@ After changing extension files, click reload on `chrome://extensions` and reload
 
 ## Adapting to the real portal
 
-Change only `fieldmap.js`:
+Check `fieldmap.js` and the actual portal behavior:
 - `patient` and `line`: the text of each field's label on the real screens.
 - `lineMode`: `"entry-form"` (one set of boxes plus an add button, as in the guide) or `"rows"`.
 - `addLineButton`, `datePicker`: the real button labels and how the pop-up labels its days.
   If the real date box accepts typing, the pop-up isn't used.
 - `defaults.serviceType`: the service type to use when a claim line doesn't say.
-- Add the portal's address to `matches` in `manifest.json`.
+- Check the portal address against `matches` in `manifest.json`; the provider host is already listed.
 
 The real portal appears to be built on Oracle ADF, whose fields and date pickers can be fiddly
 to fill from outside. Expect to test and adjust on the real screens before relying on it.
@@ -87,11 +88,4 @@ to fill from outside. Expect to test and adjust on the real screens before relyi
 | `sidepanel.html` / `sidepanel.js` | Load, fill, track services added, mark submitted, settings, log |
 | `claim.js` | Checks a pasted claim and keeps only the needed fields |
 | `content.js` | Fills the open screen by label, drives the date pop-up, never presses the listed buttons |
-| `fieldmap.js` | Labels for the portal screens. The only file to change for the real portal |
-
-## Next tasks
-
-- [ ] Teach mode: click a field in the portal to set its label in `fieldmap.js` automatically
-- [ ] Send the claim from the dashboard straight to the helper (`externally_connectable`,
-      limited to the dashboard's address) instead of copy and paste
-- [ ] Service type per visit in the dashboard, once Scott confirms the types
+| `fieldmap.js` | Labels for the portal screens. Screen mappings; actual portal behavior may also require code changes |
