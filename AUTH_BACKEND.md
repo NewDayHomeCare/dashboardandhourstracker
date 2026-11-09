@@ -69,11 +69,11 @@ The current `/login` page is a temporary functional screen. Replace its presenta
 
 Do not build a password field or store Google tokens in localStorage. Use the provided server actions for sign-in/sign-out so the library handles CSRF and OAuth state. A logout button still needs to be placed in the final staff UI.
 
-**All functions exported by `src/lib/data.ts` are now asynchronous.** New CSV/schedule code must `await` them. They enforce staff access before opening the database. New route handlers and server actions must use this boundary and must not bypass it by opening SQLite directly. Public pure calculation helpers remain synchronous.
+**All functions exported by `src/lib/data.ts` are now asynchronous.** New page and schedule code must `await` them. They enforce staff access before opening the database. New route handlers and server actions must use this boundary and must not bypass it by opening SQLite directly. Public pure calculation helpers remain synchronous.
 
 ## Access and audit behavior
 
-- Pages `/`, `/billing`, and `/clients/[id]` require staff sign-in.
+- Pages `/`, `/schedule`, `/review`, `/billing`, and `/clients/[id]` require staff sign-in.
 - Data reads and mutations independently enforce the same access rule. Hiding a page is not the only protection.
 - Only Google's verified email claim plus an exact allowlist match is accepted.
 - Session cookies use Auth.js encrypted JWT sessions with an eight-hour maximum age; sign-out clears the current browser session. This is not a central device/session management system.

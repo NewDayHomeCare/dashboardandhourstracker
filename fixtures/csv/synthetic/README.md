@@ -1,3 +1,5 @@
+> Historical development samples only. These files are not a dashboard feature and are not required for Schedule → Review care → Billing. See the [project introduction](../../../README.md).
+
 # Synthetic CSV fixtures
 
 These three files contain entirely invented people, phone numbers, identifiers, dates, notes, and hours. No original client files were opened, read, or copied to create them. They are development fixtures, not anonymized extracts of real records.
