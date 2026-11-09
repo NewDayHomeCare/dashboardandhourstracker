@@ -2,9 +2,9 @@
 
 Track approved care hours, confirm completed care, and prepare claims for staff to enter in the billing portal.
 
-## Available now / 现在能做什么
+## Available now 
 
-| Page | What staff do | 中文 |
+| Page | What staff do |
 | --- | --- | --- |
 | **Overview** | Check monthly balances and the oldest unbilled services across all months. 
 | **Schedule** | Enter planned daily hours, once or repeated daily for 14 days or until month end.
@@ -17,7 +17,7 @@ Track approved care hours, confirm completed care, and prepare claims for staff 
 - **After upcoming care** = Remaining now minus explicitly scheduled hours after today in the selected month.
 - No predictions based on historical averages. Recording submission or payment does not deduct hours again.
 
-### Schedule → Review care → Billing / 使用流程
+### Schedule → Review care → Billing
 
 1. In **Schedule**, enter the client, date, and planned hours.
 2. After care finishes, open **Review care** and choose **Confirm / adjust hours**. The client, date, and planned hours are already filled in.
