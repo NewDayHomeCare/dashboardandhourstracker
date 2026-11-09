@@ -84,6 +84,18 @@ describe("hours left", () => {
     Array.from({ length: to - from + 1 }, (_, i) => ({ clientId: "c1", date: nov(from + i), hours }));
   const TODAY = "2026-11-07";
 
+  it("keeps the current balance unchanged when scheduling and submitting claims", () => {
+    const a = [approval({ monthlyHours: 100 })];
+    const completed = [visit("2026-11-06", 20)];
+    const before = monthSummary(a, completed, "c1", "2026-11", [], TODAY);
+    const schedule = plan(8, 8, 3);
+    const after = monthSummary(a, completed, "c1", "2026-11", schedule, TODAY);
+    expect(before).toMatchObject({ leftHours: 80, projectedLeft: 80 });
+    expect(after).toMatchObject({ leftHours: 80, projectedHours: 3, projectedLeft: 77 });
+    const submitted = monthSummary(a, completed.map(v => ({ ...v, submitted: true })), "c1", "2026-11", schedule, TODAY);
+    expect(submitted).toMatchObject({ leftHours: 80, projectedLeft: 77, billedHours: 20, unbilledHours: 0 });
+  });
+
   it("projects from scheduled care, and calls using every approved hour on track", () => {
     const s = monthSummary([approval({ monthlyHours: 60 })], days(1, 7, 2), "c1", "2026-11", plan(8, 30, 2), TODAY);
     expect(s).toMatchObject({ usedHours: 14, scheduledHours: 46, projectedHours: 46, projectionSource: "schedule", projectedTotal: 60, projectedLeft: 0, status: "on-track" });
@@ -95,18 +107,18 @@ describe("hours left", () => {
     expect(s.leftHours).toBe(46); // not over yet
   });
 
-  it("estimates the days after the last scheduled day from the last 4 weeks", () => {
-    // 14 h in the last 28 days = 0.5 h/day; Nov 15-30 is 16 unscheduled days = 8 h
+  it("does not invent care after the last scheduled day", () => {
+    // Only the 14 explicitly scheduled hours count, regardless of recent usage.
     const s = monthSummary([approval({ monthlyHours: 60 })], days(1, 7, 2), "c1", "2026-11", plan(8, 14, 2), TODAY);
-    expect(s).toMatchObject({ scheduledHours: 14, projectedHours: 22, projectionSource: "schedule+pace", projectedTotal: 36, status: "unused" });
+    expect(s).toMatchObject({ scheduledHours: 14, projectedHours: 14, projectionSource: "schedule", projectedTotal: 28, status: "unused" });
   });
 
-  it("estimates from recent pace when nothing is scheduled", () => {
-    // 0.5 h/day for the 23 days left in November
+  it("shows no upcoming hours when nothing is scheduled", () => {
+    // Recent usage must not create future scheduled care.
     const s = monthSummary([approval({ monthlyHours: 30 })], days(1, 7, 2), "c1", "2026-11", [], TODAY);
-    expect(s).toMatchObject({ projectedHours: 11.5, projectionSource: "pace", projectedTotal: 25.5, status: "unused" });
+    expect(s).toMatchObject({ projectedHours: 0, projectionSource: "none", projectedTotal: 14, status: "unused" });
     const heavy = monthSummary([approval({ monthlyHours: 40 })], [visit("2026-11-02", 36)], "c1", "2026-11", [], TODAY);
-    expect(heavy.status).toBe("will-go-over"); // 36 h in a week, on pace for about 66
+    expect(heavy.status).toBe("on-track"); // No scheduled care exceeds the remaining 4 h.
   });
 
   it("ignores scheduled days up to today, and other clients' schedules", () => {

@@ -17,8 +17,6 @@ export const settings = {
   billingDeadlineDays: 60,
   deadlineSoonDays: 45,
   deadlineUrgentDays: 55,
-  /** Unscheduled days are estimated from the hours used in this many days. */
-  projectionLookbackDays: 28,
   /** "Hours left unused" when used + projected is below this share of approved hours (the goal is to use them all). */
   unusedShare: 0.9,
   /** How far ahead care can be scheduled. */

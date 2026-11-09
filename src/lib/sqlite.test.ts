@@ -99,11 +99,11 @@ describe("local database", () => {
     const before = db.getVisits().length;
     expect(db.scheduleCare({ clientId: "c03", dates: ["2026-12-01", "2026-12-02"], hours: 3 })).toEqual({ ok: true, count: 2 });
     expect(db.scheduleCare({ clientId: "c03", dates: ["2026-12-02"], hours: 4.5 })).toEqual({ ok: true, count: 1 });
-    expect(db.getSchedule().filter(d => d.clientId === "c03" && d.date >= "2026-12-01")).toEqual([
+    expect(db.getSchedule().filter(d => d.clientId === "c03" && d.date >= "2026-12-01")).toMatchObject([
       { clientId: "c03", date: "2026-12-01", hours: 3 }, { clientId: "c03", date: "2026-12-02", hours: 4.5 },
     ]);
     expect(db.getVisits()).toHaveLength(before);
-    expect(db.scheduleCare({ clientId: "c03", dates: ["2026-11-07"], hours: 2 }).ok).toBe(false); // today or earlier
+    expect(db.scheduleCare({ clientId: "c03", dates: ["2026-11-06"], hours: 2 }).ok).toBe(false); // earlier than today
     expect(db.scheduleCare({ clientId: "c03", dates: ["2027-03-01"], hours: 2 }).ok).toBe(false); // too far ahead
     expect(db.scheduleCare({ clientId: "c03", dates: ["2026-12-03"], hours: 0 }).ok).toBe(false);
     expect(db.unscheduleCare("c03", "2026-12-01").ok).toBe(true);

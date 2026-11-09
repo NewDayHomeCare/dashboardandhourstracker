@@ -75,7 +75,7 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
       </section>
 
       <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">Draft amounts use an unverified demo rate and billing cycle. Confirm rates, effective dates, claim limits and deadlines before real billing. Copy does not submit a claim.</p>
-      <BillingHistory batches={batches} />
+      <p className="mb-5 text-sm">Only completed care appears below. <Link href="/review" className="font-semibold text-brand underline">Review scheduled care first</Link> if services are missing.</p>
       {byClient.length === 0 && (
         <p className="rounded-2xl border border-line bg-white p-8 text-center text-muted">Nothing left to bill in this period.</p>
       )}
@@ -141,6 +141,7 @@ export default async function Billing({ searchParams }: { searchParams: Promise<
         ))}
       </div>
 
+      <BillingHistory batches={batches} />
       {submittedByClient.length > 0 && (
         <details className="mt-8 rounded-2xl border border-line bg-white p-5">
           <summary className="cursor-pointer text-base font-bold text-slate-900">

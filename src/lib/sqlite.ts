@@ -12,6 +12,7 @@ import { settings } from "./settings";
 type Seed = Omit<ReturnType<typeof makeSampleData>, "schedule"> & { schedule?: ScheduledDay[] };
 export type ChangeResult = { ok: true; id?: string } | { ok: false; error: string; code?: string };
 export type ScheduleInput = { clientId: string; dates: string[]; hours: number };
+export type ReviewInput = { scheduleId: string; expectedVersion: number; outcome: "completed" | "cancelled"; hours?: number; note?: string; requestId: string };
 export type ServiceInput = { clientId: string; date: string; hours: number; requestId: string; note?: string; confirmDuplicate?: boolean };
 export type SubmissionInput = { visits: { id: string; hours: number; version?: number }[]; reference: string; submittedOn: string; requestId: string; confirmed: boolean };
 const fail = (error: string, code?: string): ChangeResult => ({ ok: false, error, code });
@@ -27,7 +28,9 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
   const legacy = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='visits'").get();
   const upgraded = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='service_entries'").get();
   const needsRevisionMigration = upgraded && (!db.prepare("PRAGMA table_info(service_entries)").all().some(c=>c.name==="version") || !db.prepare("PRAGMA table_info(billing_batches)").all().some(c=>c.name==="voidedIds"));
-  if ((legacy && !upgraded) || needsRevisionMigration) {
+  const scheduleExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='scheduled_care'").get();
+  const needsScheduleMigration = scheduleExists && !db.prepare("PRAGMA table_info(scheduled_care)").all().some(c => c.name === "id");
+  if ((legacy && !upgraded) || needsRevisionMigration || needsScheduleMigration) {
     const folder = join(dirname(filename), "backups"); mkdirSync(folder, { recursive: true });
     const backup = join(folder, `before-ledger-${Date.now()}-${randomUUID()}.sqlite`);
     db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
@@ -58,6 +61,13 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
       CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, clientId TEXT NOT NULL, action TEXT NOT NULL, targetId TEXT NOT NULL,
         at TEXT NOT NULL, actor TEXT NOT NULL, beforeJson TEXT, afterJson TEXT);
     `);
+    const scheduleColumns = db.prepare("PRAGMA table_info(scheduled_care)").all();
+    if (!scheduleColumns.some(c => c.name === "id")) {
+      db.exec("ALTER TABLE scheduled_care ADD COLUMN id TEXT; ALTER TABLE scheduled_care ADD COLUMN version INTEGER NOT NULL DEFAULT 1;");
+      for (const row of db.prepare("SELECT clientId,date FROM scheduled_care").all())
+        db.prepare("UPDATE scheduled_care SET id=? WHERE clientId=? AND date=?").run(randomUUID(),String(row.clientId),String(row.date));
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS schedule_id ON scheduled_care(id); CREATE TABLE IF NOT EXISTS schedule_reviews (scheduleId TEXT PRIMARY KEY, clientId TEXT NOT NULL, date TEXT NOT NULL, plannedHundredths INTEGER NOT NULL, outcome TEXT NOT NULL, serviceId TEXT UNIQUE, note TEXT NOT NULL, reviewedAt TEXT NOT NULL);");
     const entryColumns = db.prepare("PRAGMA table_info(service_entries)").all();
     if (!entryColumns.some(c => c.name === "version")) db.exec("ALTER TABLE service_entries ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
     const batchColumns = db.prepare("PRAGMA table_info(billing_batches)").all();
@@ -72,7 +82,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
       for (const c of initial.clients) db.prepare("INSERT INTO clients VALUES (?,?,?,?)").run(c.id,c.firstName,c.lastName,c.portalId);
       for (const a of initial.approvals) db.prepare("INSERT INTO approvals VALUES (?,?,?,?,?,?)").run(a.id,a.clientId,hundredths(a.monthlyHours),a.effectiveFrom,a.recordedOn,a.note??null);
       for (const v of initial.visits) db.prepare("INSERT INTO service_entries(id,clientId,date,hoursHundredths,submitted,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)").run(v.id,v.clientId,v.date,hundredths(v.hours),Number(v.submitted),now,now);
-      for (const d of initial.schedule ?? []) db.prepare("INSERT INTO scheduled_care VALUES (?,?,?,?,?)").run(d.clientId,d.date,hundredths(d.hours),now,now);
+      for (const d of initial.schedule ?? []) db.prepare("INSERT INTO scheduled_care(clientId,date,hoursHundredths,createdAt,updatedAt,id) VALUES (?,?,?,?,?,?)").run(d.clientId,d.date,hundredths(d.hours),now,now,randomUUID());
       db.prepare("INSERT INTO metadata VALUES ('initialized','1')").run();
     }
   });
@@ -85,7 +95,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
   const getVisits = (): Visit[] => db.prepare("SELECT id,clientId,date,hoursHundredths/100.0 AS hours,submitted,note,batchId,createdAt,updatedAt,version FROM service_entries ORDER BY date,createdAt,rowid").all().map(r=>({...r,submitted:Boolean(r.submitted)})) as unknown as Visit[];
   const getAudit = (clientId?: string): AuditEvent[] => (clientId?db.prepare("SELECT * FROM audit_events WHERE clientId=? ORDER BY rowid DESC").all(clientId):db.prepare("SELECT * FROM audit_events ORDER BY rowid DESC LIMIT 200").all()).map(plain) as unknown as AuditEvent[];
   const getBatches = (): BillingBatch[] => db.prepare("SELECT * FROM billing_batches ORDER BY rowid DESC").all().map(r=>({...r,visits:JSON.parse(String(r.snapshot)),voidedVisitIds:JSON.parse(String(r.voidedIds))})) as unknown as BillingBatch[];
-  const getSchedule = (): ScheduledDay[] => db.prepare("SELECT clientId,date,hoursHundredths/100.0 AS hours FROM scheduled_care ORDER BY date,clientId").all().map(plain) as unknown as ScheduledDay[];
+  const getSchedule = (): ScheduledDay[] => db.prepare("SELECT id,version,clientId,date,hoursHundredths/100.0 AS hours FROM scheduled_care ORDER BY date,clientId").all().map(plain) as unknown as ScheduledDay[];
   const rawVisit = (id: string) => db.prepare("SELECT * FROM service_entries WHERE id=?").get(id);
   const dayTotal = (clientId: string,date: string,except?:string) => Number(db.prepare("SELECT COALESCE(SUM(hoursHundredths),0) AS total FROM service_entries WHERE clientId=? AND date=? AND id != ?").get(clientId,date,except??"")?.total??0);
   const replay = (id:string,operation:string,payload:string): ChangeResult|undefined => {
@@ -101,6 +111,7 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     const payload=JSON.stringify([input.clientId,input.date,hundredths(input.hours),input.note?.trim()??""]);
     return tx(()=>{
       const old=replay(input.requestId,"add",payload);if(old)return old;
+      if(db.prepare("SELECT id FROM scheduled_care WHERE clientId=? AND date=?").get(input.clientId,input.date))return fail("This day has a schedule waiting for review. Confirm or adjust it on Review care instead.");
       if(dayTotal(input.clientId,input.date)+hundredths(input.hours)>2400)return fail("The total for one client on one day cannot exceed 24 hours.");
       const duplicate=db.prepare("SELECT id FROM service_entries WHERE clientId=? AND date=? AND hoursHundredths=?").get(input.clientId,input.date,hundredths(input.hours));
       if(duplicate&&!input.confirmDuplicate)return fail("A service with this client, date and duration already exists. Confirm this is a separate service.","duplicate");
@@ -220,14 +231,41 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     if(!validHours(input.hours))return {ok:false,error:"Enter hours greater than 0 and at most 24, up to two decimals."};
     const latest=addDays(today(),settings.maxScheduleDaysAhead);
     if(!Array.isArray(input.dates)||!input.dates.length||input.dates.length>settings.maxScheduleDaysAhead)return {ok:false,error:"Choose the days to schedule."};
-    if(input.dates.some(d=>!validDate(d)||d<=today()||d>latest))return {ok:false,error:`Schedule days after today, up to ${settings.maxScheduleDaysAhead} days ahead (until ${latest}).`};
+    if(input.dates.some(d=>!validDate(d)||d<today()||d>latest))return {ok:false,error:`Schedule today or later, up to ${settings.maxScheduleDaysAhead} days ahead (until ${latest}).`};
     return tx(()=>{const now=new Date().toISOString();
       for(const date of new Set(input.dates)){
         const before=db.prepare("SELECT * FROM scheduled_care WHERE clientId=? AND date=?").get(input.clientId,date);
-        db.prepare("INSERT INTO scheduled_care VALUES (?,?,?,?,?) ON CONFLICT(clientId,date) DO UPDATE SET hoursHundredths=excluded.hoursHundredths,updatedAt=excluded.updatedAt").run(input.clientId,date,hundredths(input.hours),now,now);
+        db.prepare("INSERT INTO scheduled_care(clientId,date,hoursHundredths,createdAt,updatedAt,id) VALUES (?,?,?,?,?,?) ON CONFLICT(clientId,date) DO UPDATE SET hoursHundredths=excluded.hoursHundredths,updatedAt=excluded.updatedAt,version=scheduled_care.version+1").run(input.clientId,date,hundredths(input.hours),now,now,randomUUID());
         audit(input.clientId,"care_scheduled",`${input.clientId}|${date}`,before?plain(before):null,{date,hours:input.hours});
       }
       return {ok:true,count:new Set(input.dates).size};});
+  }
+  function reviewSchedule(input: ReviewInput): ChangeResult {
+    if (!input.requestId?.trim() || input.requestId.length > 120) return fail("Reopen the review before saving.");
+    if (!["completed", "cancelled"].includes(input.outcome)) return fail("Choose completed or did not happen.");
+    if (input.outcome === "completed" && !validHours(input.hours ?? NaN)) return fail("Enter actual hours greater than 0 and at most 24, up to two decimals. If no care happened, choose Did not happen.");
+    if ((input.note ?? "").length > 1000 || (input.outcome === "cancelled" && !input.note?.trim())) return fail("Enter a cancellation reason (up to 1,000 characters).");
+    const payload = JSON.stringify([input.scheduleId,input.expectedVersion,input.outcome,input.hours ?? null,input.note?.trim() ?? ""]);
+    return tx(() => {
+      const previous = replay(input.requestId,"review",payload); if (previous) return previous;
+      const plan = db.prepare("SELECT * FROM scheduled_care WHERE id=?").get(input.scheduleId);
+      if (!plan || !Number.isInteger(input.expectedVersion) || plan.version !== input.expectedVersion) return fail("This schedule was changed or already reviewed. Refresh before continuing.");
+      const clientId = String(plan.clientId), date = String(plan.date);
+      if (input.outcome === "completed" && date > today()) return fail("Future care cannot be confirmed as completed.");
+      // A daily plan cannot safely be inferred to be the same as an existing manual record.
+      if (input.outcome === "completed" && dayTotal(clientId,date) > 0) return fail("Completed care already exists for this client and date. Check the service records first. If this plan was already recorded, dismiss it with a reason instead of adding hours again.");
+      let serviceId: string | null = null;
+      const now = new Date().toISOString();
+      if (input.outcome === "completed") {
+        serviceId = "service-" + randomUUID();
+        db.prepare("INSERT INTO service_entries(id,clientId,date,hoursHundredths,submitted,note,createdAt,updatedAt) VALUES (?,?,?,?,0,?,?,?)").run(serviceId,clientId,date,hundredths(input.hours!),input.note?.trim() ?? "",now,now);
+      }
+      db.prepare("INSERT INTO schedule_reviews VALUES (?,?,?,?,?,?,?,?)").run(input.scheduleId,clientId,date,plan.hoursHundredths,input.outcome,serviceId,input.note?.trim() ?? "",now);
+      db.prepare("DELETE FROM scheduled_care WHERE id=?").run(input.scheduleId);
+      db.prepare("INSERT INTO requests VALUES (?,?,?,?)").run(input.requestId,"review",payload,serviceId ?? input.scheduleId);
+      audit(clientId,"schedule_" + input.outcome,input.scheduleId,plain(plan),{serviceId,actualHours: input.outcome === "completed" ? input.hours : 0,note:input.note?.trim() ?? ""});
+      return {ok:true,id:serviceId ?? input.scheduleId};
+    });
   }
   function unscheduleCare(clientId:string,date:string):ChangeResult {
     return tx(()=>{const before=db.prepare("SELECT * FROM scheduled_care WHERE clientId=? AND date=?").get(clientId,date);
@@ -244,5 +282,5 @@ export function openHoursDatabase(filename: string, seed: () => Seed = makeSampl
     const daily=new Map<string,number>();for(const v of batch.status === "returned" ? [] : batch.visits.filter(v=>!(batch.voidedVisitIds??[]).includes(v.id)))daily.set(v.date,(daily.get(v.date)??0)+hundredths(v.hours));
     return [...daily.values()].reduce((s,h)=>s+costCents(h/100,batch.rateCents),0);
   };
-  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,unmarkSubmitted,importVisits,getSchedule,scheduleCare,unscheduleCare,close:()=>db.close()};
+  return {getClients,getClient,getApprovals,getVisits,getAudit,getBatches,batchTotal,addApproval,addService,editService,removeService,submitBatch,changeBatchStatus,setVisitHours,deleteVisit,markClaimSubmitted,unmarkSubmitted,importVisits,getSchedule,scheduleCare,reviewSchedule,unscheduleCare,close:()=>db.close()};
 }
