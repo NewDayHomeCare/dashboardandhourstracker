@@ -2,24 +2,20 @@
 
 Track approved care hours, confirm completed care, and prepare claims for staff to enter in the billing portal.
 
-护理小时与账单管理：查看剩余小时、安排服务、确认实际完成小时，再准备申报资料。
-
 ## Available now / 现在能做什么
 
 | Page | What staff do | 中文 |
 | --- | --- | --- |
-| **Overview** | Check monthly balances and the oldest unbilled services across all months. | 总览：查看余额和未申报提醒 |
-| **Schedule** | Enter planned daily hours, once or repeated daily for 14 days or until month end. | 排班：安排日期和每日小时 |
-| **Review care** | Confirm planned hours, adjust actual hours, or dismiss a plan with a reason. | 确认服务：核对实际完成小时 |
-| **Billing** | Prepare claims, copy details for the Chrome helper, and record portal submission results. | 账单：准备资料并记录申报结果 |
+| **Overview** | Check monthly balances and the oldest unbilled services across all months. 
+| **Schedule** | Enter planned daily hours, once or repeated daily for 14 days or until month end.
+| **Review care** | Confirm planned hours, adjust actual hours, or dismiss a plan with a reason.
+| **Billing** | Prepare claims, copy details for the Chrome helper, and record portal submission results.
 
-### Clear balances / 分清两种余额
+### Clear balances
 
 - **Remaining now** = monthly allowance minus recorded completed hours.
 - **After upcoming care** = Remaining now minus explicitly scheduled hours after today in the selected month.
 - No predictions based on historical averages. Recording submission or payment does not deduct hours again.
-
-现在剩余 = 额度 − 已完成小时。未来排班后的余额再扣除今天之后已安排的小时。今天及过去尚未确认的排班在 **Review care** 中，核对后余额才反映这些实际服务。
 
 ### Schedule → Review care → Billing / 使用流程
 
@@ -29,8 +25,6 @@ Track approved care hours, confirm completed care, and prepare claims for staff 
 4. Use **Go to this billing period** to find the completed care in **Billing**.
 
 **Example:** Plan 6 hours, confirm 5 actually completed, and 5 hours become ready for billing. With a 100-hour allowance and no other completed care, Remaining now is 95 hours. This does not submit a claim.
-
-例如：计划6小时，实际完成5小时，确认后账单中记5小时；无需再次输入客户和日期。
 
 The Overview **Unbilled services** list shows the 10 oldest completed services awaiting submission, including earlier months. Each row links to service details and its billing period.
 
